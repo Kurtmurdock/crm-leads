@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -31,6 +32,31 @@ class ConnectionManager:
                 pass
 
 manager = ConnectionManager()
+
+
+async def job_timeout_leads():
+    """Roda a cada 5 minutos verificando leads sem resposta."""
+    while True:
+        await asyncio.sleep(300)
+        try:
+            db = next(get_db())
+            leads_ativos = db.query(Lead).filter(Lead.bot_ativo == True).all()
+            for lead in leads_ativos:
+                loja = db.query(Loja).filter(Loja.id == lead.loja_id).first()
+                if not loja:
+                    continue
+                vendedores = db.query(Vendedor).filter(
+                    Vendedor.loja_id == loja.id, Vendedor.ativo == True
+                ).all()
+                from services.bot_service import verificar_timeout
+                await verificar_timeout(lead, db, loja, vendedores)
+            db.close()
+        except Exception as e:
+            print(f"Erro no job de timeout: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(job_timeout_leads())
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
