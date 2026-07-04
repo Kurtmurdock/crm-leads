@@ -30,6 +30,16 @@ FLUXO = {
     }
 }
 
+def formatar_whatsapp(numero: str) -> str:
+    n = numero.replace("+", "").replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    if len(n) == 11:
+        return f"({n[:2]}) {n[2:7]}-{n[7:]}"
+    elif len(n) == 12:
+        return f"+{n[:2]} ({n[2:4]}) {n[4:9]}-{n[9:]}"
+    elif len(n) == 13:
+        return f"+{n[:2]} ({n[2:4]}) {n[4:9]}-{n[9:]}"
+    return numero
+
 async def enviar_whatsapp(phone_number_id: str, token: str, destinatario: str, mensagem: str):
     url = f"https://graph.facebook.com/{META_VERSION}/{phone_number_id}/messages"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -49,13 +59,11 @@ async def processar_mensagem_bot(lead, mensagem_cliente: str, db, loja):
 
     etapa = lead.bot_etapa or 0
     resposta = None
-    proxima_etapa = etapa
 
     if etapa in FLUXO:
         passo = FLUXO[etapa]
 
         if passo.get("tipo") == "texto_livre":
-            # Usa Claude pra extrair dados do texto livre
             client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
             msg = client.messages.create(
                 model="claude-sonnet-4-6",
@@ -76,7 +84,7 @@ Responda APENAS em JSON: {{"nome": "", "cpf": "", "data_nascimento": ""}}"""
             except:
                 pass
 
-            proxima_etapa = 99
+            lead.bot_etapa = 99
             lead.bot_ativo = False
             lead.coluna = "atribuido"
             lead.status = "Em andamento"
@@ -112,28 +120,40 @@ Responda APENAS em JSON: {{"nome": "", "cpf": "", "data_nascimento": ""}}"""
                     lead.bot_etapa = 3
                     db.commit()
             else:
-                resposta = f"Por favor, escolha uma das opções enviando o número correspondente:\n\n"
+                resposta = "Por favor, escolha uma das opções enviando o número correspondente:\n\n"
                 for k, v in opcoes.items():
                     resposta += f"{k}️⃣ {v}\n"
 
     return {"resposta": resposta, "transferir": False}
 
+def montar_mensagem_transferencia(vendedor_nome: str, vendedor_whatsapp: str, loja_nome: str) -> str:
+    numero_formatado = formatar_whatsapp(vendedor_whatsapp)
+    return (
+        f"✅ Perfeito! Suas informações foram registradas com sucesso.\n\n"
+        f"Em instantes você será atendido por:\n\n"
+        f"👤 *{vendedor_nome}*\n"
+        f"📱 *{numero_formatado}*\n"
+        f"🏍️ *{loja_nome}*\n\n"
+        f"Ele(a) entrará em contato por este mesmo número de WhatsApp. "
+        f"Fique à vontade para aguardar ou iniciar a conversa clicando aqui:\n"
+        f"👉 https://wa.me/{vendedor_whatsapp.replace('+','').replace(' ','')}"
+    )
+
 async def notificar_vendedor(vendedor, lead, evolution_url: str, evolution_key: str):
     loja_nome = lead.loja.nome if lead.loja else ""
-    mensagem = f"""🏍️ *Novo lead qualificado!* — {loja_nome}
-
-👤 *Nome:* {lead.nome or 'Não informado'}
-📱 *WhatsApp:* +{lead.whatsapp}
-🏍️ *Interesse:* {lead.veiculo_interesse or 'Não informado'}
-🎯 *Finalidade:* {lead.finalidade or '-'}
-💳 *Forma de compra:* {lead.forma_compra or '-'}
-{f'🖥️ *Modalidade:* {lead.modalidade}' if lead.modalidade else ''}
-
-📋 *CPF:* {lead.cpf or 'Não informado'}
-🎂 *Nascimento:* {lead.data_nascimento or 'Não informado'}
-
-👆 Clique para iniciar o atendimento:
-https://wa.me/{lead.whatsapp}"""
+    mensagem = (
+        f"🏍️ *Novo lead qualificado!* — {loja_nome}\n\n"
+        f"👤 *Nome:* {lead.nome or 'Não informado'}\n"
+        f"📱 *WhatsApp:* +{lead.whatsapp}\n"
+        f"🏍️ *Interesse:* {lead.veiculo_interesse or 'Não informado'}\n"
+        f"🎯 *Finalidade:* {lead.finalidade or '-'}\n"
+        f"💳 *Forma de compra:* {lead.forma_compra or '-'}\n"
+        + (f"🖥️ *Modalidade:* {lead.modalidade}\n" if lead.modalidade else "")
+        + f"\n📋 *CPF:* {lead.cpf or 'Não informado'}\n"
+        f"🎂 *Nascimento:* {lead.data_nascimento or 'Não informado'}\n\n"
+        f"👆 Clique para iniciar o atendimento:\n"
+        f"https://wa.me/{lead.whatsapp}"
+    )
 
     url = f"{evolution_url}/message/sendText/{vendedor.loja_id}"
     headers = {"apikey": evolution_key, "Content-Type": "application/json"}
