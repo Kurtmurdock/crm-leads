@@ -1,5 +1,5 @@
 const CONFIG = {
-  API_URL: "https://crm-leads-production.up.railway.app",
-  WS_URL: "wss://crm-leads-production.up.railway.app/ws",
-  VERSION: "1.0.0"
+  API_URL: "https://crm-leads-production-27fc.up.railway.app",
+  WS_URL: "wss://crm-leads-production-27fc.up.railway.app/ws",
+  VERSION: "1.1.0"
 };

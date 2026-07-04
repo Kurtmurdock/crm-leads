@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrar — CRM Leads</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="login-screen">
+    <div class="login-card">
+      <div class="login-mark">CRM · Motos</div>
+      <h1 class="login-title">Salinas &amp; Atlântica</h1>
+      <form class="login-form" id="loginForm">
+        <div class="field">
+          <label for="username">Usuário</label>
+          <input id="username" name="username" type="text" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label for="senha">Senha</label>
+          <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="login-error" id="loginError"></div>
+        <button type="submit" class="btn btn-accent" id="loginBtn" style="margin-top:6px;">Entrar</button>
+      </form>
+      <div class="login-foot">Acesso restrito à equipe das lojas. Fale com o administrador se não tiver uma conta.</div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script>
+    const form = document.getElementById('loginForm');
+    const errEl = document.getElementById('loginError');
+    const btn = document.getElementById('loginBtn');
+
+    // Se já logado, vai direto pro app
+    if (sessionStorage.getItem('crm_user')) {
+      window.location.href = 'index.html';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Entrando...';
+      try {
+        const resp = await fetch(`${CONFIG.API_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value.trim(),
+            senha: document.getElementById('senha').value
+          })
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          throw new Error(data.detail || 'Credenciais inválidas');
+        }
+        const data = await resp.json();
+        sessionStorage.setItem('crm_user', JSON.stringify(data));
+        window.location.href = 'index.html';
+      } catch (err) {
+        errEl.textContent = err.message || 'Não foi possível entrar. Tente novamente.';
+        btn.disabled = false;
+        btn.textContent = 'Entrar';
+      }
+    });
+  </script>
+</body>
+</html>
