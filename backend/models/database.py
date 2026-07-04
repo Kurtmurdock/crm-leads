@@ -1,10 +1,15 @@
-from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text, Boolean, Float, ForeignKey, Enum
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import os
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://user:pass@localhost/crm")
+
+# Railway usa postgres:// mas SQLAlchemy precisa de postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -58,6 +63,7 @@ class Lead(Base):
     data_nascimento = Column(String)
     bot_ativo = Column(Boolean, default=True)
     bot_etapa = Column(Integer, default=0)
+    reengajamento_enviado = Column(Boolean, default=False)
     transferido_em = Column(DateTime, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
