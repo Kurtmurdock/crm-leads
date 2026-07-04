@@ -96,8 +96,18 @@ async def meta_webhook(request: Request, db: Session = Depends(get_db)):
                     vendedores = db.query(Vendedor).filter(Vendedor.loja_id == loja.id, Vendedor.ativo == True).all()
                     if vendedores:
                         import random
+                        from services.bot_service import montar_mensagem_transferencia
                         vendedor = random.choice(vendedores)
                         lead.vendedor_id = vendedor.id
+                        db.commit()
+                        msg_transf = montar_mensagem_transferencia(
+                            vendedor_nome=vendedor.nome,
+                            vendedor_whatsapp=vendedor.whatsapp,
+                            loja_nome=loja.nome
+                        )
+                        await enviar_whatsapp(loja.meta_phone_id, loja.meta_token, phone, msg_transf)
+                        msg_bot_transf = Mensagem(lead_id=lead.id, de="bot", conteudo=msg_transf, origem="bot")
+                        db.add(msg_bot_transf)
                         db.commit()
                         evolution_url = os.environ.get("EVOLUTION_URL", "")
                         evolution_key = os.environ.get("EVOLUTION_KEY", "")
