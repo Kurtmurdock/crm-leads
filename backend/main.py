@@ -259,7 +259,7 @@ def listar_agendamentos(loja_id: str = None, db: Session = Depends(get_db)):
              "tipo": a.tipo, "status": a.status, "loja_id": a.loja_id} for a in q.order_by(Agendamento.data_hora).all()]
 
 @app.post("/api/agendamentos")
-def criar_agendamento(body: dict, db: Session = Depends(get_db)):
+async def criar_agendamento(body: dict, db: Session = Depends(get_db)):
     from datetime import datetime
     a = Agendamento(
         nome_cliente=body["nome"],
