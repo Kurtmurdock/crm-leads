@@ -30,6 +30,8 @@
     metricas: null,
     ws: null,
     wsRetryMs: 2000,
+    rtLeadId: null,
+    charts: {}, // Chart.js instances, keyed by canvas id, so we can destroy before re-render
   };
 
   const COLUNAS = [
@@ -38,6 +40,21 @@
     { id: "negociacao", label: "Negociação", icon: "💬" },
     { id: "fechado", label: "Fechado", icon: "🏁" },
     { id: "perdido", label: "Perdido", icon: "✕" },
+  ];
+
+  // Lojas conhecidas do grupo — usadas só para cadastro rápido na aba Config
+  // quando ainda não existem no banco. A fonte de verdade continua sendo
+  // sempre a API /api/lojas.
+  const LOJAS_CONHECIDAS = [
+    { id: "salinas", nome: "Salinas" },
+    { id: "atlantica", nome: "Atlântica" },
+    { id: "uniao", nome: "União" },
+    { id: "vision", nome: "Vision" },
+    { id: "mare", nome: "Maré" },
+    { id: "muralha", nome: "Muralha" },
+    { id: "imperio", nome: "Império" },
+    { id: "confort", nome: "Confort" },
+    { id: "infinity", nome: "Infinity Motos" },
   ];
 
   // ---------------------------------------------------------------
@@ -94,6 +111,7 @@
   const VIEW_META = {
     dashboard: ["Dashboard", "Visão geral do funil de leads"],
     kanban: ["Kanban", "Arraste os cards entre as etapas"],
+    realtime: ["Ao Vivo", "Atendimentos em andamento, em tempo real"],
     contatos: ["Contatos", "Todos os leads, com filtros e exportação"],
     agendamentos: ["Agendamentos", "Visitas e compromissos marcados"],
     metricas: ["Métricas", "Velocidade de atendimento e conversão"],
@@ -156,6 +174,7 @@
   function renderView(view) {
     if (view === "dashboard") renderDashboard();
     if (view === "kanban") renderKanban();
+    if (view === "realtime") renderRealtime();
     if (view === "contatos") renderContatos();
     if (view === "agendamentos") renderAgendamentos();
     if (view === "metricas") renderMetricas();
@@ -172,18 +191,18 @@
     try {
       const m = await api(`/api/metricas${state.lojaAtual ? `?loja_id=${encodeURIComponent(state.lojaAtual)}` : ""}`);
       state.metricas = m;
-      el.innerHTML = buildDashboardHTML(m);
-      wireDashboardEvents();
+      el.innerHTML = buildDashboardHTML(m, "dash");
+      renderCharts(m, "dash");
     } catch (e) {
       el.innerHTML = emptyState("Não foi possível carregar as métricas", e.message);
     }
   }
 
-  function buildDashboardHTML(m) {
+  function buildDashboardHTML(m, idPrefix) {
     const canalEntries = Object.entries(m.por_canal || {});
     const colunaEntries = Object.entries(m.por_coluna || {});
-    const maxCanal = Math.max(1, ...canalEntries.map(([, v]) => v));
-    const maxColuna = Math.max(1, ...colunaEntries.map(([, v]) => v));
+    const hasCanal = canalEntries.length > 0;
+    const hasColuna = colunaEntries.length > 0;
 
     return `
       <div class="kpi-row">
@@ -208,31 +227,71 @@
 
         <div class="card">
           <div style="font-family:var(--font-display);font-weight:700;font-size:15px;margin-bottom:16px;">Por etapa</div>
-          <div class="bars">
-            ${colunaEntries.length ? colunaEntries.map(([k, v]) => `
-              <div class="bar-row">
-                <div class="dim">${esc(colLabel(k))}</div>
-                <div class="bar-track"><div class="bar-fill" style="width:${(v / maxColuna) * 100}%"></div></div>
-                <div class="n">${v}</div>
-              </div>
-            `).join("") : `<div class="faint" style="font-size:13px;">Sem dados no período.</div>`}
-          </div>
+          ${hasColuna
+            ? `<div class="chart-box"><canvas id="${idPrefix}Coluna"></canvas></div>`
+            : `<div class="faint" style="font-size:13px;">Sem dados no período.</div>`}
         </div>
       </div>
 
       <div class="card" style="margin-top:16px;">
         <div style="font-family:var(--font-display);font-weight:700;font-size:15px;margin-bottom:16px;">Por canal</div>
-        <div class="bars">
-          ${canalEntries.length ? canalEntries.map(([k, v]) => `
-            <div class="bar-row">
-              <div class="dim">${esc(k)}</div>
-              <div class="bar-track"><div class="bar-fill" style="width:${(v / maxCanal) * 100}%; background:var(--blue);"></div></div>
-              <div class="n">${v}</div>
-            </div>
-          `).join("") : `<div class="faint" style="font-size:13px;">Sem dados no período.</div>`}
-        </div>
+        ${hasCanal
+          ? `<div class="chart-box" style="max-width:420px;"><canvas id="${idPrefix}Canal"></canvas></div>`
+          : `<div class="faint" style="font-size:13px;">Sem dados no período.</div>`}
       </div>
     `;
+  }
+
+  // Cores do tema, na ordem em que aparecem nas etapas do Kanban.
+  const CHART_COLORS = ["#4f8fd1", "#f5a623", "#a78bfa", "#3ed68c", "#e5484d", "#5d6472"];
+
+  function renderCharts(m, idPrefix) {
+    if (typeof Chart === "undefined") return; // CDN pode falhar a carregar; degrada graciosamente
+    const colunaEntries = Object.entries(m.por_coluna || {});
+    const canalEntries = Object.entries(m.por_canal || {});
+
+    const colunaCanvas = document.getElementById(`${idPrefix}Coluna`);
+    if (colunaCanvas && colunaEntries.length) {
+      destroyChart(`${idPrefix}Coluna`);
+      state.charts[`${idPrefix}Coluna`] = new Chart(colunaCanvas, {
+        type: "bar",
+        data: {
+          labels: colunaEntries.map(([k]) => colLabel(k)),
+          datasets: [{ data: colunaEntries.map(([, v]) => v), backgroundColor: "#f5a623", borderRadius: 4, maxBarThickness: 34 }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: "#939aa8", font: { size: 11 } }, grid: { display: false } },
+            y: { ticks: { color: "#939aa8", stepSize: 1 }, grid: { color: "#232830" }, beginAtZero: true },
+          },
+        },
+      });
+    }
+
+    const canalCanvas = document.getElementById(`${idPrefix}Canal`);
+    if (canalCanvas && canalEntries.length) {
+      destroyChart(`${idPrefix}Canal`);
+      state.charts[`${idPrefix}Canal`] = new Chart(canalCanvas, {
+        type: "doughnut",
+        data: {
+          labels: canalEntries.map(([k]) => k),
+          datasets: [{ data: canalEntries.map(([, v]) => v), backgroundColor: CHART_COLORS, borderColor: "#1d222a", borderWidth: 2 }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: "right", labels: { color: "#939aa8", boxWidth: 11, font: { size: 12 } } } },
+        },
+      });
+    }
+  }
+
+  function destroyChart(key) {
+    if (state.charts[key]) {
+      state.charts[key].destroy();
+      delete state.charts[key];
+    }
   }
 
   function colLabel(id) {
@@ -265,8 +324,6 @@
       </div>
     `;
   }
-
-  function wireDashboardEvents() {}
 
   function emptyState(title, sub) {
     return `<div class="empty-state"><div class="big">${esc(title)}</div>${sub ? esc(sub) : ""}</div>`;
@@ -413,6 +470,73 @@
       box.scrollTop = box.scrollHeight;
     } catch (e) {
       document.getElementById("drawerMsgs").innerHTML = emptyState("Erro ao carregar conversa", e.message);
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // AO VIVO (realtime — atendimentos já transferidos pro vendedor)
+  // ---------------------------------------------------------------
+  async function renderRealtime() {
+    const el = document.getElementById("viewRealtime");
+    el.innerHTML = `
+      <div class="rt-wrap">
+        <div class="rt-list" id="rtList"><div class="skeleton" style="height:80px;margin:10px;"></div></div>
+        <div class="rt-chat">
+          <div class="rt-chat-head" id="rtChatHead">Selecione um atendimento</div>
+          <div class="rt-chat-body" id="rtChatBody">
+            <div class="empty-state">Escolha um lead à esquerda para ver a conversa em tempo real.</div>
+          </div>
+        </div>
+      </div>
+    `;
+    await loadLeads();
+    drawRtList();
+  }
+
+  function drawRtList() {
+    const list = document.getElementById("rtList");
+    if (!list) return;
+    // Atendimentos "ao vivo" = já saíram do bot e não estão perdidos —
+    // ou seja, estão de fato em conversa ativa com um vendedor.
+    const ativos = state.leads.filter((l) => !l.bot_ativo && l.coluna !== "perdido");
+    if (!ativos.length) {
+      list.innerHTML = emptyState("Nenhum atendimento ativo", "Assim que um lead for transferido para um vendedor, ele aparece aqui.");
+      return;
+    }
+    list.innerHTML = ativos.map((l) => `
+      <div class="rt-lead ${state.rtLeadId === l.id ? "active" : ""}" data-id="${l.id}">
+        <div class="name">${esc(l.nome || "Sem nome")}</div>
+        <div class="phone mono">${esc(l.whatsapp)}</div>
+        <div class="when">${esc(l.vendedor || "sem vendedor")} · ${fmtDate(l.criado_em)}</div>
+      </div>
+    `).join("");
+    list.querySelectorAll(".rt-lead").forEach((it) => {
+      it.addEventListener("click", () => selectRtLead(Number(it.dataset.id)));
+    });
+  }
+
+  async function selectRtLead(id) {
+    state.rtLeadId = id;
+    drawRtList();
+    const lead = state.leads.find((l) => l.id === id);
+    document.getElementById("rtChatHead").textContent = lead ? `${lead.nome || "Lead"} · ${lead.whatsapp}` : "Conversa";
+    await drawRtMessages(id);
+  }
+
+  async function drawRtMessages(id) {
+    const body = document.getElementById("rtChatBody");
+    if (!body) return;
+    try {
+      const msgs = await api(`/api/leads/${id}/mensagens`);
+      body.innerHTML = msgs.length ? msgs.map((m) => `
+        <div class="msg ${esc(m.de)}">
+          <div class="h">${esc(m.de)} · ${fmtDateTime(m.hora)}</div>
+          ${esc(m.conteudo)}
+        </div>
+      `).join("") : emptyState("Sem mensagens ainda");
+      body.scrollTop = body.scrollHeight;
+    } catch (e) {
+      body.innerHTML = emptyState("Erro ao carregar conversa", e.message);
     }
   }
 
@@ -608,7 +732,8 @@
       const qs = new URLSearchParams({ dias });
       if (state.lojaAtual) qs.set("loja_id", state.lojaAtual);
       const m = await api(`/api/metricas?${qs.toString()}`);
-      body.innerHTML = buildDashboardHTML(m);
+      body.innerHTML = buildDashboardHTML(m, "met");
+      renderCharts(m, "met");
     } catch (e) {
       body.innerHTML = emptyState("Erro ao carregar métricas", e.message);
     }
@@ -733,6 +858,12 @@
         <div class="dim" style="font-size:12.5px;margin-top:10px;">Configure este endpoint como webhook global (ou por instância) na sua Evolution API para monitorar as respostas dos vendedores em tempo real.</div>
       </div>
 
+      <div class="card" style="margin-bottom:16px;">
+        <div style="font-family:var(--font-display);font-weight:700;font-size:15px;margin-bottom:4px;">Lojas do grupo</div>
+        <div class="dim" style="font-size:12.5px;margin-bottom:14px;">Cadastre rapidamente as lojas que ainda não existem no banco. As já cadastradas aparecem com um selo verde.</div>
+        <div id="lojasConhecidasGrid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+      </div>
+
       <div class="config-grid" id="configGrid"><div class="skeleton" style="height:220px;"></div></div>
     `;
 
@@ -743,7 +874,37 @@
       });
     });
 
+    drawLojasConhecidas();
     drawConfigGrid();
+  }
+
+  function drawLojasConhecidas() {
+    const box = document.getElementById("lojasConhecidasGrid");
+    if (!box) return;
+    box.innerHTML = LOJAS_CONHECIDAS.map((lc) => {
+      const existente = state.lojas.find((l) => l.id === lc.id);
+      return existente
+        ? `<span class="badge b-green">✓ ${esc(lc.nome)}</span>`
+        : `<button class="btn btn-sm" data-criar-loja="${esc(lc.id)}" data-nome-loja="${esc(lc.nome)}">+ ${esc(lc.nome)}</button>`;
+    }).join("");
+    box.querySelectorAll("[data-criar-loja]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "Criando...";
+        try {
+          await api("/api/lojas", { method: "POST", body: JSON.stringify({ id: btn.dataset.criarLoja, nome: btn.dataset.nomeLoja }) });
+          state.lojas = await api("/api/lojas");
+          toast(`${btn.dataset.nomeLoja} cadastrada.`, "success");
+          renderLojaSwitch();
+          drawLojasConhecidas();
+          drawConfigGrid();
+        } catch (err) {
+          toast(`Erro ao criar loja: ${err.message}`, "error");
+          btn.disabled = false;
+          btn.textContent = `+ ${btn.dataset.nomeLoja}`;
+        }
+      });
+    });
   }
 
   function drawConfigGrid() {
@@ -848,10 +1009,16 @@
       let data;
       try { data = JSON.parse(evt.data); } catch (_) { return; }
       if (["novo_lead", "nova_mensagem", "novo_agendamento"].includes(data.tipo)) {
-        if (state.view === "kanban" || state.view === "dashboard" || state.view === "contatos") {
-          if (state.view === "kanban") { loadLeads().then(() => drawKanbanBoard("")); }
-          if (state.view === "dashboard") renderDashboard();
-          if (state.view === "contatos") { loadLeads().then(drawContatosTable); }
+        if (state.view === "kanban") { loadLeads().then(() => drawKanbanBoard("")); }
+        if (state.view === "dashboard") renderDashboard();
+        if (state.view === "contatos") { loadLeads().then(drawContatosTable); }
+        if (state.view === "realtime") {
+          loadLeads().then(() => {
+            drawRtList();
+            if (data.tipo === "nova_mensagem" && Number(data.lead_id) === state.rtLeadId) {
+              drawRtMessages(state.rtLeadId);
+            }
+          });
         }
         if (data.tipo === "novo_agendamento" && state.view === "agendamentos") loadAgendamentos();
       }
