@@ -243,7 +243,7 @@
   }
 
   // Cores do tema, na ordem em que aparecem nas etapas do Kanban.
-  const CHART_COLORS = ["#4f8fd1", "#f5a623", "#a78bfa", "#3ed68c", "#e5484d", "#5d6472"];
+  const CHART_COLORS = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#64748b"];
 
   function renderCharts(m, idPrefix) {
     if (typeof Chart === "undefined") return; // CDN pode falhar a carregar; degrada graciosamente
@@ -257,14 +257,14 @@
         type: "bar",
         data: {
           labels: colunaEntries.map(([k]) => colLabel(k)),
-          datasets: [{ data: colunaEntries.map(([, v]) => v), backgroundColor: "#f5a623", borderRadius: 4, maxBarThickness: 34 }],
+          datasets: [{ data: colunaEntries.map(([, v]) => v), backgroundColor: "#3b82f6", borderRadius: 4, maxBarThickness: 34 }],
         },
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
-            x: { ticks: { color: "#939aa8", font: { size: 11 } }, grid: { display: false } },
-            y: { ticks: { color: "#939aa8", stepSize: 1 }, grid: { color: "#232830" }, beginAtZero: true },
+            x: { ticks: { color: "#94a3b8", font: { size: 11 } }, grid: { display: false } },
+            y: { ticks: { color: "#94a3b8", stepSize: 1 }, grid: { color: "#1e2d45" }, beginAtZero: true },
           },
         },
       });
@@ -277,11 +277,11 @@
         type: "doughnut",
         data: {
           labels: canalEntries.map(([k]) => k),
-          datasets: [{ data: canalEntries.map(([, v]) => v), backgroundColor: CHART_COLORS, borderColor: "#1d222a", borderWidth: 2 }],
+          datasets: [{ data: canalEntries.map(([, v]) => v), backgroundColor: CHART_COLORS, borderColor: "#111827", borderWidth: 2 }],
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { position: "right", labels: { color: "#939aa8", boxWidth: 11, font: { size: 12 } } } },
+          plugins: { legend: { position: "right", labels: { color: "#94a3b8", boxWidth: 11, font: { size: 12 } } } },
         },
       });
     }
