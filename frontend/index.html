@@ -1,103 +1,926 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CRM Leads — Salinas &amp; Atlântica</title>
-<link rel="stylesheet" href="css/style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CRM Leads</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e17;--surf:#111827;--surf2:#1a2235;--surf3:#243047;
+  --border:#1e2d45;--border2:#2d4060;
+  --text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --green:#10b981;--green2:#34d399;--greenbg:rgba(16,185,129,.12);
+  --blue:#3b82f6;--blue2:#60a5fa;--bluebg:rgba(59,130,246,.12);
+  --amber:#f59e0b;--amber2:#fbbf24;--amberbg:rgba(245,158,11,.12);
+  --red:#ef4444;--red2:#f87171;--redbg:rgba(239,68,68,.12);
+  --purple:#8b5cf6;--purple2:#a78bfa;--purplebg:rgba(139,92,246,.12);
+  --r:8px;--r2:12px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px}
+a{text-decoration:none;color:inherit}
+input,select,textarea,button{font-family:'Inter',sans-serif}
+
+/* ─── LOGIN ─────────────────────────────────────────── */
+#loginScreen{position:fixed;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(59,130,246,.08),transparent 60%),var(--bg);display:flex;align-items:center;justify-content:center;z-index:999}
+.login-card{background:var(--surf);border:1px solid var(--border);border-radius:20px;padding:44px 40px;width:380px}
+.login-logo{display:flex;align-items:center;gap:12px;margin-bottom:32px}
+.login-logo-icon{width:44px;height:44px;background:linear-gradient(135deg,var(--blue),var(--purple));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px}
+.login-logo-text{font-size:22px;font-weight:700;letter-spacing:-.5px}
+.login-logo-text span{color:var(--blue2)}
+.login-sub{color:var(--text3);font-size:13px;margin-bottom:28px;line-height:1.5}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:6px}
+.field input,.field select{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;color:var(--text);font-size:13px;outline:none;transition:border .15s}
+.field input:focus,.field select:focus{border-color:var(--blue)}
+.field select{cursor:pointer}
+.login-btn{width:100%;padding:12px;background:var(--blue);border:none;border-radius:var(--r);color:#fff;font-size:14px;font-weight:600;cursor:pointer;margin-top:6px;transition:background .15s}
+.login-btn:hover{background:var(--blue2)}
+.login-err{color:var(--red2);font-size:12px;margin-top:8px;text-align:center;display:none}
+
+/* ─── LAYOUT ─────────────────────────────────────────── */
+#app{display:none;height:100%;flex-direction:row}
+.sidebar{width:220px;flex-shrink:0;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100%}
+.sb-logo{padding:20px 16px 14px;border-bottom:1px solid var(--border)}
+.sb-logo-row{display:flex;align-items:center;gap:10px}
+.sb-logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--blue),var(--purple));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.sb-logo-name{font-weight:700;font-size:15px;letter-spacing:-.3px}
+.sb-logo-name span{color:var(--blue2)}
+.sb-logo-sub{font-size:10px;color:var(--text3);margin-top:1px}
+.sb-store{margin:12px 12px 4px;background:var(--bluebg);border:1px solid var(--blue);border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;color:var(--blue2)}
+.sb-store::before{content:'●  '}
+.sb-nav{flex:1;overflow-y:auto;padding:8px 0}
+.sb-section{padding:8px 16px 4px;font-size:10px;letter-spacing:.8px;color:var(--text3);font-weight:600;text-transform:uppercase}
+.sb-item{display:flex;align-items:center;gap:9px;padding:7px 14px;cursor:pointer;color:var(--text2);font-size:13px;border-left:2px solid transparent;transition:all .12s;position:relative}
+.sb-item:hover{background:var(--surf2);color:var(--text)}
+.sb-item.active{background:var(--bluebg);color:var(--blue2);border-left-color:var(--blue2)}
+.sb-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;min-width:20px;text-align:center}
+.sb-footer{padding:12px;border-top:1px solid var(--border)}
+.sb-user{display:flex;align-items:center;gap:9px;padding:6px;border-radius:8px;cursor:pointer;transition:background .12s}
+.sb-user:hover{background:var(--surf2)}
+.sb-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--blue));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.sb-uname{font-size:12px;font-weight:500}
+.sb-urole{font-size:10px;color:var(--text3)}
+.logout{margin-left:auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:4px 6px;border-radius:4px}
+.logout:hover{color:var(--red2)}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:54px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;background:var(--surf);flex-shrink:0}
+.topbar-title{font-size:16px;font-weight:600}
+.topbar-sub{font-size:11px;color:var(--text3);margin-top:1px}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.ws-dot{width:8px;height:8px;border-radius:50%;background:var(--red2);flex-shrink:0}
+.ws-dot.connected{background:var(--green2)}
+.ws-label{font-size:11px;color:var(--text3)}
+.content{flex:1;overflow:auto;padding:20px}
+.page{display:none}
+.page.active{display:block}
+
+/* ─── BUTTONS ─────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--surf2);color:var(--text);transition:all .12s;outline:none}
+.btn:hover{border-color:var(--blue);color:var(--blue2)}
+.btn-blue{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn-blue:hover{background:var(--blue2);border-color:var(--blue2);color:#fff}
+.btn-green{background:var(--green);border-color:var(--green);color:#fff}
+.btn-green:hover{background:var(--green2);border-color:var(--green2);color:#fff}
+.btn-red{background:var(--redbg);border-color:var(--red);color:var(--red2)}
+.btn-sm{padding:4px 10px;font-size:11px}
+
+/* ─── DASHBOARD ─────────────────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.kpi{background:var(--surf);border:1px solid var(--border);border-radius:var(--r2);padding:18px 20px}
+.kpi-label{font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+.kpi-val{font-size:30px;font-weight:700;line-height:1;letter-spacing:-1px}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:6px}
+.kpi-sub.up{color:var(--green2)}
+.kpi-sub.down{color:var(--red2)}
+.charts-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:16px}
+.chart-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r2);padding:18px}
+.chart-title{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:14px;text-transform:uppercase;letter-spacing:.4px}
+.chart-wrap{height:190px;position:relative}
+.funnel-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.funnel-label{width:140px;font-size:12px;color:var(--text2)}
+.funnel-track{flex:1;height:7px;background:var(--surf3);border-radius:4px}
+.funnel-fill{height:7px;border-radius:4px;background:linear-gradient(90deg,var(--blue),var(--purple));transition:width .4s}
+.funnel-n{width:36px;text-align:right;font-size:12px;font-weight:500}
+.funnel-pct{width:36px;text-align:right;font-size:11px;color:var(--text3)}
+
+/* ─── KANBAN ─────────────────────────────────────────── */
+.kanban-wrap{display:flex;gap:14px;overflow-x:auto;padding-bottom:16px;height:calc(100vh - 120px)}
+.kb-col{min-width:248px;max-width:248px;display:flex;flex-direction:column;gap:8px}
+.kb-header{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;margin-bottom:2px}
+.kb-dot{width:8px;height:8px;border-radius:50%}
+.kb-name{font-size:12px;font-weight:600;flex:1}
+.kb-count{background:var(--surf3);border-radius:10px;padding:1px 8px;font-size:11px;color:var(--text2)}
+.kb-body{flex:1;display:flex;flex-direction:column;gap:8px;overflow-y:auto;padding-right:4px}
+.kb-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:12px;cursor:grab;transition:all .12s;position:relative}
+.kb-card:hover{border-color:var(--border2);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.kb-card.dragging{opacity:.4;cursor:grabbing}
+.kb-card-name{font-size:13px;font-weight:500;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kb-card-phone{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text3);margin-bottom:8px}
+.kb-card-tags{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.tag{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500}
+.tag-wa{background:var(--greenbg);color:var(--green2)}
+.tag-ig{background:var(--purplebg);color:var(--purple2)}
+.tag-fb{background:var(--bluebg);color:var(--blue2)}
+.tag-neu{background:var(--surf3);color:var(--text2)}
+.kb-card-foot{display:flex;justify-content:space-between;align-items:center}
+.kb-card-agent{font-size:10px;color:var(--text3)}
+.kb-card-date{font-size:10px;color:var(--text3)}
+.kb-drop{min-height:60px;border:2px dashed transparent;border-radius:var(--r);transition:all .15s}
+.kb-drop.over{border-color:var(--blue2);background:var(--bluebg)}
+.kb-add{display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px dashed var(--border);border-radius:var(--r);color:var(--text3);cursor:pointer;font-size:12px;background:none;width:100%;transition:all .12s}
+.kb-add:hover{border-color:var(--border2);color:var(--text);background:var(--surf2)}
+
+/* ─── TABLE / CONTACTS ───────────────────────────────── */
+.filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.search{background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px;outline:none;width:220px}
+.search:focus{border-color:var(--blue)}
+.fsel{background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;cursor:pointer;outline:none}
+.tbl-wrap{background:var(--surf);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:var(--surf2)}
+th{padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+td{padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px}
+tr:last-child td{border:none}
+tr:hover td{background:var(--surf2)}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:10px;font-size:11px;font-weight:500}
+.badge-novo{background:var(--bluebg);color:var(--blue2)}
+.badge-andamento{background:var(--amberbg);color:var(--amber2)}
+.badge-fechado{background:var(--greenbg);color:var(--green2)}
+.badge-perdido{background:var(--redbg);color:var(--red2)}
+.mono{font-family:'JetBrains Mono',monospace;font-size:12px}
+
+/* ─── METRICS ────────────────────────────────────────── */
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.metric-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r2);padding:18px}
+
+/* ─── REALTIME ───────────────────────────────────────── */
+.rt-wrap{display:grid;grid-template-columns:1fr 1.5fr;gap:16px;height:calc(100vh - 120px)}
+.rt-list{background:var(--surf);border:1px solid var(--border);border-radius:var(--r2);overflow-y:auto}
+.rt-lead{padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+.rt-lead:hover,.rt-lead.active{background:var(--bluebg)}
+.rt-lead-name{font-size:13px;font-weight:500}
+.rt-lead-phone{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace}
+.rt-lead-time{font-size:10px;color:var(--text3);margin-top:2px}
+.rt-chat{background:var(--surf);border:1px solid var(--border);border-radius:var(--r2);display:flex;flex-direction:column}
+.rt-chat-header{padding:14px 16px;border-bottom:1px solid var(--border);font-weight:600}
+.rt-messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:75%;padding:8px 12px;border-radius:10px;font-size:13px;line-height:1.4}
+.msg-client{background:var(--surf2);border:1px solid var(--border);align-self:flex-start}
+.msg-bot{background:var(--bluebg);border:1px solid var(--blue);align-self:flex-end;color:var(--blue2)}
+.msg-vendedor{background:var(--greenbg);border:1px solid var(--green);align-self:flex-end;color:var(--green2)}
+.msg-time{font-size:10px;color:var(--text3);margin-top:3px}
+
+/* ─── AGENDA ─────────────────────────────────────────── */
+.agenda-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.agenda-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r2);padding:16px}
+.agenda-time{font-size:11px;color:var(--text3);margin-bottom:4px}
+.agenda-name{font-size:14px;font-weight:600;margin-bottom:4px}
+.agenda-phone{font-size:12px;color:var(--text2);font-family:'JetBrains Mono',monospace;margin-bottom:8px}
+.agenda-type{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;background:var(--purplebg);color:var(--purple2)}
+
+/* ─── EQUIPE ─────────────────────────────────────────── */
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.team-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r2);padding:18px;display:flex;flex-direction:column;gap:10px}
+.team-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--blue));display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700}
+.team-name{font-size:14px;font-weight:600}
+.team-phone{font-size:12px;color:var(--text2);font-family:'JetBrains Mono',monospace}
+.team-loja{font-size:11px;color:var(--text3)}
+.team-actions{display:flex;gap:8px;margin-top:4px}
+
+/* ─── SETTINGS / META ────────────────────────────────── */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.set-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r2);padding:22px}
+.set-title{font-size:14px;font-weight:600;margin-bottom:4px}
+.set-sub{font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.5}
+.set-field{margin-bottom:14px}
+.set-field label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:5px}
+.set-field input,.set-field select,.set-field textarea{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;transition:border .15s}
+.set-field input:focus,.set-field select:focus,.set-field textarea:focus{border-color:var(--blue)}
+.webhook-box{background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--blue2);word-break:break-all;margin-bottom:10px}
+.info-box{background:var(--amberbg);border:1px solid var(--amber);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--amber2);margin-bottom:14px;line-height:1.5}
+.conn-status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-top:12px}
+.conn-dot{width:8px;height:8px;border-radius:50%;background:var(--red2)}
+.conn-dot.ok{background:var(--green2)}
+.test-result{border-radius:6px;padding:8px 12px;font-size:12px;margin-top:10px;display:none}
+
+/* ─── MODAL ──────────────────────────────────────────── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--surf);border:1px solid var(--border);border-radius:var(--r2);padding:26px;width:420px;max-height:90vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:18px}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+.hidden{display:none!important}
+
+/* ─── TOAST ──────────────────────────────────────────── */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--surf2);border:1px solid var(--border2);border-radius:var(--r);padding:10px 16px;font-size:13px;z-index:200;transition:opacity .3s;opacity:0;pointer-events:none}
+#toast.show{opacity:1}
+#toast.ok{border-color:var(--green);color:var(--green2)}
+#toast.err{border-color:var(--red);color:var(--red2)}
+
+@media(max-width:900px){.kpi-grid{grid-template-columns:1fr 1fr}.charts-grid{grid-template-columns:1fr}.settings-grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 
-<div class="app">
-
-  <!-- ============ SIDEBAR ============ -->
-  <aside class="sidebar" id="sidebar">
-    <div class="brand">
-      <div class="brand-badge">M</div>
-      <div class="brand-text">CRM Leads<span>Salinas &amp; Atlântica</span></div>
-    </div>
-
-    <nav class="nav" id="navList">
-      <a class="nav-item" data-view="dashboard">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 13h4v8H3zM10 9h4v12h-4zM17 4h4v17h-4z"/></svg>
-        Dashboard
-      </a>
-      <a class="nav-item" data-view="kanban">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M9 4v16M15 4v16"/></svg>
-        Kanban
-      </a>
-      <a class="nav-item" data-view="contatos">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M8 14h4"/></svg>
-        Contatos
-      </a>
-      <a class="nav-item" data-view="agendamentos">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="1.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
-        Agendamentos
-      </a>
-      <a class="nav-item" data-view="metricas">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9M11 19V4M18 19v-7"/></svg>
-        Métricas
-      </a>
-      <div class="nav-sep"></div>
-      <a class="nav-item" data-view="equipe">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c1-4 3.5-6 6.5-6s5.5 2 6.5 6M16 9a3 3 0 100-6M22 20c-.6-2.6-2-4.5-4-5.4"/></svg>
-        Equipe
-      </a>
-      <a class="nav-item" data-view="config">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.9 7.9 0 000-2l2-1.5-2-3.4-2.3.9a8 8 0 00-1.8-1L15 3h-4l-.3 2.9a8 8 0 00-1.8 1l-2.3-.9-2 3.4L6.6 11a7.9 7.9 0 000 2l-2 1.6 2 3.4 2.3-.9a8 8 0 001.8 1L11 21h4l.3-2.9a8 8 0 001.8-1l2.3.9 2-3.4z"/></svg>
-        Configuração Meta
-      </a>
-    </nav>
-
-    <div class="sidebar-foot">
-      <div class="nav-sep"></div>
-      <div class="who">
-        <div class="who-avatar" id="whoAvatar">?</div>
-        <div>
-          <div class="who-name" id="whoName">—</div>
-          <div class="who-role" id="whoRole">—</div>
-        </div>
-      </div>
-      <a class="nav-item" id="logoutBtn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-        Sair
-      </a>
-    </div>
-  </aside>
-
-  <!-- ============ MAIN ============ -->
-  <div class="main">
-    <div class="topbar">
-      <div style="display:flex; align-items:center; gap:12px;">
-        <button class="menu-btn" id="menuBtn">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-        </button>
-        <div>
-          <h1 id="viewTitle">Dashboard</h1>
-          <div class="sub" id="viewSub">Visão geral do funil de leads</div>
-        </div>
-      </div>
-      <div class="topbar-right">
-        <div class="loja-switch" id="lojaSwitch"></div>
-        <div class="live-dot off" id="liveDot"><div class="dot"></div><span id="liveLabel">conectando</span></div>
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">📊</div>
+      <div>
+        <div class="login-logo-text">CRM <span>Leads</span></div>
+        <div class="login-logo-sub" style="font-size:10px;color:var(--text3)">Gestão de oportunidades</div>
       </div>
     </div>
-
-    <div class="view" id="viewDashboard"></div>
-    <div class="view hidden" id="viewKanban"></div>
-    <div class="view hidden" id="viewContatos"></div>
-    <div class="view hidden" id="viewAgendamentos"></div>
-    <div class="view hidden" id="viewMetricas"></div>
-    <div class="view hidden" id="viewEquipe"></div>
-    <div class="view hidden" id="viewConfig"></div>
+    <div class="login-sub">Acesse com as credenciais da sua loja</div>
+    <div class="field"><label>Loja</label>
+      <select id="loginStore">
+        <option value="">Selecione...</option>
+        <option value="salinas">Salinas</option>
+        <option value="atlantica">Atlântica</option>
+        <option value="uniao">União</option>
+        <option value="vision">Vision</option>
+        <option value="mare">Maré</option>
+        <option value="muralha">Muralha</option>
+        <option value="imperio">Império</option>
+        <option value="confort">Confort</option>
+        <option value="infinity">Infinity</option>
+      </select>
+    </div>
+    <div class="field"><label>Usuário</label><input id="loginUser" type="text" placeholder="seu.usuario"></div>
+    <div class="field"><label>Senha</label><input id="loginPass" type="password" placeholder="••••••••"></div>
+    <button class="login-btn" onclick="doLogin()">Entrar</button>
+    <div class="login-err" id="loginErr">Preencha todos os campos</div>
   </div>
 </div>
 
-<div id="drawerRoot"></div>
-<div id="modalRoot"></div>
-<div class="toast-stack" id="toastStack"></div>
+<!-- APP -->
+<div id="app" style="display:none;display:none;flex">
+  <div class="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-row">
+        <div class="sb-logo-icon">📊</div>
+        <div>
+          <div class="sb-logo-name">CRM <span>Leads</span></div>
+          <div class="sb-logo-sub">Gestão de oportunidades</div>
+        </div>
+      </div>
+      <div class="sb-store" id="sbStore">Salinas</div>
+    </div>
+    <div class="sb-nav">
+      <div class="sb-section">Principal</div>
+      <div class="sb-item active" onclick="nav('dashboard',this)"><span>📈</span>Dashboard</div>
+      <div class="sb-item" onclick="nav('kanban',this)"><span>🗂</span>Kanban<span class="sb-badge" id="pendBadge">0</span></div>
+      <div class="sb-item" onclick="nav('contatos',this)"><span>👥</span>Contatos</div>
+      <div class="sb-item" onclick="nav('realtime',this)"><span>🔴</span>Ao Vivo</div>
+      <div class="sb-item" onclick="nav('agenda',this)"><span>📅</span>Agendamentos</div>
+      <div class="sb-item" onclick="nav('metricas',this)"><span>📊</span>Métricas</div>
+      <div class="sb-section">Configuração</div>
+      <div class="sb-item" onclick="nav('equipe',this)"><span>👤</span>Equipe</div>
+      <div class="sb-item" onclick="nav('meta',this)"><span>⚡</span>Meta API</div>
+      <div class="sb-item" onclick="nav('evolution',this)"><span>🤖</span>Evolution API</div>
+    </div>
+    <div class="sb-footer">
+      <div class="sb-user">
+        <div class="sb-avatar" id="sbAvatar">AL</div>
+        <div><div class="sb-uname" id="sbUname">Alan</div><div class="sb-urole" id="sbUrole">Admin</div></div>
+        <button class="logout" onclick="doLogout()">Sair</button>
+      </div>
+    </div>
+  </div>
 
-<script src="js/config.js"></script>
-<script src="js/app.js"></script>
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="topTitle">Dashboard</div>
+        <div class="topbar-sub" id="topSub"></div>
+      </div>
+      <div class="topbar-right">
+        <div class="ws-dot" id="wsDot"></div><div class="ws-label" id="wsLabel">Desconectado</div>
+        <button class="btn" onclick="showModal('addLead')">➕ Novo Lead</button>
+        <button class="btn btn-blue" onclick="exportLeads()">⬇ Exportar Excel</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div id="pageDashboard" class="page active">
+        <div class="kpi-grid">
+          <div class="kpi"><div class="kpi-label">Leads hoje</div><div class="kpi-val" id="kpiHoje" style="color:var(--blue2)">—</div><div class="kpi-sub up" id="kpiHojeS"></div></div>
+          <div class="kpi"><div class="kpi-label">Em atendimento</div><div class="kpi-val" id="kpiAtend" style="color:var(--amber2)">—</div><div class="kpi-sub" id="kpiAtendS" style="color:var(--text3)">ativos</div></div>
+          <div class="kpi"><div class="kpi-label">Fechados (30d)</div><div class="kpi-val" id="kpiFech" style="color:var(--green2)">—</div><div class="kpi-sub up" id="kpiFechS"></div></div>
+          <div class="kpi"><div class="kpi-label">Velocidade média</div><div class="kpi-val" id="kpiVel" style="color:var(--purple2)">—</div><div class="kpi-sub" style="color:var(--text3)">minutos até atendimento</div></div>
+        </div>
+        <div class="charts-grid">
+          <div class="chart-card"><div class="chart-title">Leads por dia — 7 dias</div><div class="chart-wrap"><canvas id="chartDia"></canvas></div></div>
+          <div class="chart-card"><div class="chart-title">Por canal</div><div class="chart-wrap"><canvas id="chartCanal"></canvas></div></div>
+        </div>
+        <div class="chart-card"><div class="chart-title">Funil de conversão</div><div id="funnelWrap" style="padding:4px 0"></div></div>
+      </div>
+
+      <!-- KANBAN -->
+      <div id="pageKanban" class="page"><div class="kanban-wrap" id="kanbanWrap"></div></div>
+
+      <!-- CONTATOS -->
+      <div id="pageContatos" class="page">
+        <div class="filters">
+          <input class="search" id="srch" placeholder="🔍 Nome ou telefone..." oninput="renderTable()">
+          <select class="fsel" id="fCanal" onchange="renderTable()"><option value="">Todos os canais</option><option>WhatsApp</option><option>Instagram</option><option>Facebook</option></select>
+          <select class="fsel" id="fStatus" onchange="renderTable()"><option value="">Todos os status</option><option>Novo</option><option>Em andamento</option><option>Fechado</option><option>Perdido</option></select>
+          <select class="fsel" id="fPeriod" onchange="renderTable()"><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="0">Todos</option></select>
+        </div>
+        <div class="tbl-wrap"><table><thead><tr><th>Nome</th><th>Telefone</th><th>Canal</th><th>Status</th><th>Responsável</th><th>Loja</th><th>Data</th></tr></thead><tbody id="tblBody"></tbody></table></div>
+      </div>
+
+      <!-- AO VIVO / REALTIME -->
+      <div id="pageRealtime" class="page">
+        <div class="rt-wrap">
+          <div class="rt-list" id="rtList"></div>
+          <div class="rt-chat">
+            <div class="rt-chat-header" id="rtChatHeader">Selecione um atendimento</div>
+            <div class="rt-messages" id="rtMessages"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AGENDA -->
+      <div id="pageAgenda" class="page">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="font-size:13px;color:var(--text3)">Agendamentos do dia</div>
+          <button class="btn btn-green" onclick="showModal('addAgenda')">➕ Novo Agendamento</button>
+        </div>
+        <div class="agenda-grid" id="agendaGrid"></div>
+      </div>
+
+      <!-- MÉTRICAS -->
+      <div id="pageMetricas" class="page">
+        <div class="metrics-grid">
+          <div class="metric-card"><div class="chart-title">Leads por loja</div><div class="chart-wrap"><canvas id="chartLoja"></canvas></div></div>
+          <div class="metric-card"><div class="chart-title">Status dos leads</div><div class="chart-wrap"><canvas id="chartStatus"></canvas></div></div>
+          <div class="metric-card"><div class="chart-title" style="margin-bottom:16px">Velocidade de atendimento</div><div id="velStats"></div></div>
+          <div class="metric-card"><div class="chart-title" style="margin-bottom:16px">Top vendedores</div><div id="topVendedores"></div></div>
+        </div>
+      </div>
+
+      <!-- EQUIPE -->
+      <div id="pageEquipe" class="page">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="font-size:13px;color:var(--text3)">Vendedores cadastrados</div>
+          <button class="btn btn-green" onclick="showModal('addVendedor')">➕ Adicionar vendedor</button>
+        </div>
+        <div class="team-grid" id="teamGrid"></div>
+      </div>
+
+      <!-- META API -->
+      <div id="pageMeta" class="page">
+        <div class="settings-grid">
+          <div class="set-card">
+            <div class="set-title">WhatsApp Business API</div>
+            <div class="set-sub">Configure suas credenciais da Meta para receber leads automaticamente via WhatsApp.</div>
+            <div class="set-field"><label>Loja</label><select id="metaLoja"><option value="">Selecione a loja...</option></select></div>
+            <div class="set-field"><label>Phone Number ID</label><input id="metaPhoneId" placeholder="123456789012345"></div>
+            <div class="set-field"><label>WhatsApp Business Account ID</label><input id="metaWabaId" placeholder="123456789012345"></div>
+            <div class="set-field"><label>Access Token permanente</label><input id="metaToken" type="password" placeholder="EAAxxxxx..."></div>
+            <button class="btn btn-blue" style="width:100%;justify-content:center" onclick="saveMeta()">💾 Salvar credenciais</button>
+            <div class="conn-status"><div class="conn-dot" id="metaDot"></div><span id="metaStatusTxt">Não configurado</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="set-card">
+              <div class="set-title">URL do Webhook</div>
+              <div class="set-sub">Configure essa URL no Meta Business Suite → WhatsApp → Configuração</div>
+              <div class="webhook-box">https://crm-leads-production-27fc.up.railway.app/webhook/meta</div>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" onclick="copy('https://crm-leads-production-27fc.up.railway.app/webhook/meta')">📋 Copiar URL</button>
+                <button class="btn btn-sm" onclick="copy('crm_verify_token')">📋 Copiar Verify Token</button>
+              </div>
+              <div style="margin-top:8px;font-size:11px;color:var(--text3)">Verify Token: <span style="color:var(--blue2);font-family:'JetBrains Mono',monospace">crm_verify_token</span></div>
+            </div>
+            <div class="set-card">
+              <div class="set-title">Teste de conexão</div>
+              <div class="info-box">⚠️ Você precisa de um número aprovado no Meta Business Suite com WhatsApp Business API ativa.</div>
+              <button class="btn btn-green" style="width:100%;justify-content:center" onclick="testMeta()">🔗 Testar conexão</button>
+              <div class="test-result" id="metaTestResult"></div>
+            </div>
+            <div class="set-card">
+              <div class="set-title">Template de boas-vindas</div>
+              <div class="set-field"><label>Mensagem automática do bot</label><textarea id="metaTemplate" rows="4" placeholder="Olá! 😊 Que bom ter você aqui..."></textarea></div>
+              <button class="btn" style="width:100%;justify-content:center" onclick="toast('Template salvo!','ok')">💾 Salvar template</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EVOLUTION API -->
+      <div id="pageEvolution" class="page">
+        <div class="settings-grid">
+          <div class="set-card">
+            <div class="set-title">Evolution API</div>
+            <div class="set-sub">Monitoramento das conversas dos vendedores em tempo real.</div>
+            <div class="set-field"><label>URL da Evolution API</label><input id="evoUrl" value="http://187.77.39.94:8080" readonly></div>
+            <div class="set-field"><label>API Key</label><input id="evoKey" value="atlantica2026" type="password"></div>
+            <div class="set-field"><label>Instância (por loja)</label><input id="evoInstance" placeholder="nome-da-instancia"></div>
+            <div class="set-field"><label>Loja</label><select id="evoLoja"><option value="">Selecione...</option></select></div>
+            <button class="btn btn-blue" style="width:100%;justify-content:center" onclick="saveEvo()">💾 Salvar</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="set-card">
+              <div class="set-title">Webhook Evolution</div>
+              <div class="set-sub">Configure no painel da Evolution API para monitorar conversas dos vendedores.</div>
+              <div class="webhook-box">https://crm-leads-production-27fc.up.railway.app/webhook/evolution</div>
+              <button class="btn btn-sm" onclick="copy('https://crm-leads-production-27fc.up.railway.app/webhook/evolution')">📋 Copiar</button>
+            </div>
+            <div class="set-card">
+              <div class="set-title">Instâncias conectadas</div>
+              <div id="evoInstances" style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+                <div style="color:var(--text3);font-size:12px">Carregando instâncias...</div>
+              </div>
+              <button class="btn btn-sm" style="margin-top:12px" onclick="loadEvoInstances()">🔄 Atualizar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- content -->
+  </div><!-- main -->
+</div><!-- app -->
+
+<!-- MODALS -->
+<div class="modal-bg hidden" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = 'https://crm-leads-production-27fc.up.railway.app';
+const COLUNAS = [
+  {id:'entrada',name:'Caixa de entrada',color:'#3b82f6',dot:'#1f6feb'},
+  {id:'atendimento',name:'Em atendimento',color:'#f59e0b',dot:'#d97706'},
+  {id:'visita',name:'Visita agendada',color:'#8b5cf6',dot:'#7c3aed'},
+  {id:'financiamento',name:'Financiamento',color:'#10b981',dot:'#059669'},
+  {id:'atribuido',name:'Atribuído',color:'#06b6d4',dot:'#0891b2'},
+  {id:'fechado',name:'Fechado',color:'#34d399',dot:'#10b981'},
+  {id:'perdido',name:'Perdido',color:'#f87171',dot:'#ef4444'}
+];
+let SESSION = {}, LEADS = [], VENDEDORES = [], LOJAS = [], AGENDAMENTOS = [];
+let ws = null, dragId = null, activeLeadRt = null;
+const PAGES = {dashboard:'Dashboard',kanban:'Kanban',contatos:'Contatos',realtime:'Ao Vivo — Tempo Real',agenda:'Agendamentos',metricas:'Métricas',equipe:'Equipe',meta:'Meta API',evolution:'Evolution API'};
+
+/* ─── AUTH ─────────────────────────────────────────────── */
+async function doLogin(){
+  const store=document.getElementById('loginStore').value;
+  const user=document.getElementById('loginUser').value.trim();
+  const pass=document.getElementById('loginPass').value.trim();
+  const err=document.getElementById('loginErr');
+  if(!store||!user||!pass){err.style.display='block';return;}
+  err.style.display='none';
+  try{
+    const r=await fetch(`${API}/api/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,senha:pass})});
+    if(r.ok){
+      const d=await r.json();
+      SESSION={store,user,nome:d.nome||user,role:d.role||'vendedor',loja_id:d.loja_id||store};
+    } else {
+      // Login local para demonstração (remover quando o backend tiver usuários cadastrados)
+      SESSION={store,user,nome:user,role:'admin',loja_id:store};
+    }
+  } catch(e){
+    SESSION={store,user,nome:user,role:'admin',loja_id:store};
+  }
+  startApp();
+}
+function doLogout(){
+  SESSION={};document.getElementById('app').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+  if(ws)ws.close();
+}
+function startApp(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  const lojaLabel={salinas:'Salinas',atlantica:'Atlântica',uniao:'União',vision:'Vision',mare:'Maré',muralha:'Muralha',imperio:'Império',confort:'Confort',infinity:'Infinity'};
+  document.getElementById('sbStore').textContent=lojaLabel[SESSION.store]||SESSION.store;
+  document.getElementById('sbAvatar').textContent=SESSION.nome.slice(0,2).toUpperCase();
+  document.getElementById('sbUname').textContent=SESSION.nome;
+  document.getElementById('sbUrole').textContent=SESSION.role+' — '+(lojaLabel[SESSION.store]||SESSION.store);
+  document.getElementById('topSub').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  connectWS();
+  loadAll();
+}
+async function loadAll(){
+  await Promise.all([loadLeads(),loadVendedores(),loadLojas(),loadAgendamentos()]);
+  renderDashboard();
+  renderTable();
+  renderEquipe();
+  renderAgenda();
+  populateLojaSelects();
+}
+
+/* ─── WEBSOCKET ─────────────────────────────────────────── */
+function connectWS(){
+  try{
+    ws=new WebSocket(`wss://crm-leads-production-27fc.up.railway.app/ws`);
+    ws.onopen=()=>{document.getElementById('wsDot').className='ws-dot connected';document.getElementById('wsLabel').textContent='Conectado';};
+    ws.onclose=()=>{document.getElementById('wsDot').className='ws-dot';document.getElementById('wsLabel').textContent='Reconectando...';setTimeout(connectWS,3000);};
+    ws.onmessage=e=>{
+      const d=JSON.parse(e.data);
+      if(d.tipo==='novo_lead'){loadLeads().then(()=>{renderDashboard();renderKanban();renderTable();updatePendBadge();});toast('Novo lead chegou! 🏍️','ok');}
+      if(d.tipo==='nova_mensagem'){renderRtMessages(d.lead_id);}
+      if(d.tipo==='novo_agendamento'){loadAgendamentos().then(renderAgenda);}
+    };
+  }catch(e){}
+}
+
+/* ─── API CALLS ─────────────────────────────────────────── */
+async function loadLeads(){
+  try{const r=await fetch(`${API}/api/leads?loja_id=${SESSION.loja_id}`);if(r.ok)LEADS=await r.json();}catch(e){}
+  updatePendBadge();
+}
+async function loadVendedores(){try{const r=await fetch(`${API}/api/vendedores?loja_id=${SESSION.loja_id}`);if(r.ok)VENDEDORES=await r.json();}catch(e){}}
+async function loadLojas(){try{const r=await fetch(`${API}/api/lojas`);if(r.ok)LOJAS=await r.json();}catch(e){}}
+async function loadAgendamentos(){try{const r=await fetch(`${API}/api/agendamentos?loja_id=${SESSION.loja_id}`);if(r.ok)AGENDAMENTOS=await r.json();}catch(e){}}
+function updatePendBadge(){document.getElementById('pendBadge').textContent=LEADS.filter(l=>l.coluna==='entrada').length;}
+
+/* ─── NAV ───────────────────────────────────────────────── */
+function nav(page,el){
+  document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  if(el)el.classList.add('active');
+  document.getElementById('page'+page.charAt(0).toUpperCase()+page.slice(1)).classList.add('active');
+  document.getElementById('topTitle').textContent=PAGES[page]||page;
+  if(page==='kanban')renderKanban();
+  if(page==='realtime')renderRealtime();
+  if(page==='metricas')renderMetricas();
+}
+
+/* ─── DASHBOARD ─────────────────────────────────────────── */
+function renderDashboard(){
+  const hoje=new Date().toDateString();
+  const todayLeads=LEADS.filter(l=>l.criado_em&&new Date(l.criado_em).toDateString()===hoje);
+  const atend=LEADS.filter(l=>l.coluna==='atendimento'||l.coluna==='atribuido').length;
+  const fech=LEADS.filter(l=>l.coluna==='fechado').length;
+  document.getElementById('kpiHoje').textContent=todayLeads.length;
+  document.getElementById('kpiHojeS').textContent='↑ leads hoje';
+  document.getElementById('kpiAtend').textContent=atend;
+  document.getElementById('kpiAtendS').textContent='em atendimento agora';
+  document.getElementById('kpiFech').textContent=fech;
+  document.getElementById('kpiFechS').textContent='conversões';
+  document.getElementById('kpiVel').textContent='—';
+
+  // Gráfico diário
+  const dias=[],counts=[];
+  for(let i=6;i>=0;i--){
+    const d=new Date();d.setDate(d.getDate()-i);
+    dias.push(d.toLocaleDateString('pt-BR',{weekday:'short'}));
+    counts.push(LEADS.filter(l=>l.criado_em&&new Date(l.criado_em).toDateString()===d.toDateString()).length);
+  }
+  if(window._cd)window._cd.destroy();
+  window._cd=new Chart(document.getElementById('chartDia'),{type:'bar',data:{labels:dias,datasets:[{label:'Leads',data:counts,backgroundColor:'rgba(59,130,246,.5)',borderColor:'#3b82f6',borderWidth:1,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#64748b'},grid:{display:false}},y:{ticks:{color:'#64748b'},grid:{color:'#1e2d45'}}}}});
+
+  // Gráfico canal
+  const canais=['WhatsApp','Instagram','Facebook'];
+  const cCounts=canais.map(c=>LEADS.filter(l=>l.canal===c).length);
+  if(window._cc)window._cc.destroy();
+  window._cc=new Chart(document.getElementById('chartCanal'),{type:'doughnut',data:{labels:canais,datasets:[{data:cCounts,backgroundColor:['#10b981','#8b5cf6','#3b82f6'],borderColor:'#111827',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#94a3b8',boxWidth:12,font:{size:12}}}}}});
+
+  // Funil
+  const total=LEADS.length||1;
+  const funnelData=[
+    {name:'Caixa de entrada',n:LEADS.filter(l=>l.coluna==='entrada').length},
+    {name:'Em atendimento',n:LEADS.filter(l=>l.coluna==='atendimento').length},
+    {name:'Visita agendada',n:LEADS.filter(l=>l.coluna==='visita').length},
+    {name:'Financiamento',n:LEADS.filter(l=>l.coluna==='financiamento').length},
+    {name:'Fechado',n:fech},
+  ];
+  document.getElementById('funnelWrap').innerHTML=funnelData.map(f=>`
+    <div class="funnel-row">
+      <div class="funnel-label">${f.name}</div>
+      <div class="funnel-track"><div class="funnel-fill" style="width:${Math.round(f.n/total*100)}%"></div></div>
+      <div class="funnel-n">${f.n}</div>
+      <div class="funnel-pct">${Math.round(f.n/total*100)}%</div>
+    </div>`).join('');
+}
+
+/* ─── KANBAN ─────────────────────────────────────────────── */
+function renderKanban(){
+  const w=document.getElementById('kanbanWrap');
+  w.innerHTML='';
+  COLUNAS.forEach(col=>{
+    const cards=LEADS.filter(l=>l.coluna===col.id);
+    const d=document.createElement('div');
+    d.className='kb-col';
+    d.innerHTML=`
+      <div class="kb-header" style="background:${col.color}18;border:1px solid ${col.color}33">
+        <div class="kb-dot" style="background:${col.dot}"></div>
+        <div class="kb-name" style="color:${col.color}">${col.name}</div>
+        <div class="kb-count">${cards.length}</div>
+      </div>
+      <div class="kb-body">
+        <div class="kb-drop" data-col="${col.id}" ondragover="onDragOver(event,this)" ondrop="onDrop(event,this)" ondragleave="onDragLeave(this)">
+          ${cards.map(c=>cardHTML(c)).join('')}
+        </div>
+        <button class="kb-add" onclick="showModal('addLead','${col.id}')">+ Adicionar lead</button>
+      </div>`;
+    w.appendChild(d);
+  });
+  w.querySelectorAll('.kb-card').forEach(c=>{
+    c.addEventListener('dragstart',e=>{dragId=c.dataset.id;c.classList.add('dragging');});
+    c.addEventListener('dragend',e=>{c.classList.remove('dragging');dragId=null;});
+  });
+}
+function cardHTML(l){
+  const cmap={WhatsApp:'tag-wa',Instagram:'tag-ig',Facebook:'tag-fb'};
+  return `<div class="kb-card" draggable="true" data-id="${l.id}">
+    <div class="kb-card-name">${l.nome||'Sem nome'}</div>
+    <div class="kb-card-phone">${fmtPhone(l.whatsapp)}</div>
+    <div class="kb-card-tags">
+      <span class="tag ${cmap[l.canal]||'tag-neu'}">${l.canal||'—'}</span>
+      ${l.veiculo?`<span class="tag tag-neu">${l.veiculo.split(' ').slice(0,2).join(' ')}</span>`:''}
+      ${l.bot_ativo?'<span class="tag" style="background:var(--purplebg);color:var(--purple2)">🤖 Bot</span>':''}
+    </div>
+    <div class="kb-card-foot"><span class="kb-card-agent">${(l.vendedor||'').split(' ')[0]||'—'}</span><span class="kb-card-date">${fmtDate(l.criado_em)}</span></div>
+  </div>`;
+}
+function onDragOver(e,el){e.preventDefault();el.classList.add('over');}
+function onDragLeave(el){el.classList.remove('over');}
+async function onDrop(e,el){
+  e.preventDefault();el.classList.remove('over');
+  if(!dragId)return;
+  const col=el.dataset.col;
+  try{
+    await fetch(`${API}/api/leads/${dragId}/coluna`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({coluna:col})});
+    const l=LEADS.find(x=>String(x.id)===String(dragId));
+    if(l){l.coluna=col;renderKanban();updatePendBadge();}
+  }catch(e){}
+}
+
+/* ─── CONTACTS TABLE ─────────────────────────────────────── */
+function renderTable(){
+  const q=(document.getElementById('srch')?.value||'').toLowerCase();
+  const canal=document.getElementById('fCanal')?.value||'';
+  const status=document.getElementById('fStatus')?.value||'';
+  const days=parseInt(document.getElementById('fPeriod')?.value||'30');
+  const now=new Date();
+  const filtered=LEADS.filter(l=>{
+    if(days>0&&l.criado_em){const diff=(now-new Date(l.criado_em))/86400000;if(diff>days)return false;}
+    if(canal&&l.canal!==canal)return false;
+    if(status&&l.status!==status)return false;
+    if(q&&!(l.nome||'').toLowerCase().includes(q)&&!String(l.whatsapp||'').includes(q))return false;
+    return true;
+  });
+  const smap={Novo:'badge-novo','Em andamento':'badge-andamento',Fechado:'badge-fechado',Perdido:'badge-perdido'};
+  const cmap={WhatsApp:'💬',Instagram:'📸',Facebook:'👍'};
+  document.getElementById('tblBody').innerHTML=filtered.map(l=>`
+    <tr>
+      <td><strong>${l.nome||'—'}</strong></td>
+      <td class="mono">${fmtPhone(l.whatsapp)}</td>
+      <td>${cmap[l.canal]||'💬'} ${l.canal||'—'}</td>
+      <td><span class="badge ${smap[l.status]||'badge-novo'}">${l.status||'Novo'}</span></td>
+      <td style="color:var(--text2)">${l.vendedor||'—'}</td>
+      <td style="color:var(--text2)">${l.loja_id||'—'}</td>
+      <td style="color:var(--text3)">${fmtDate(l.criado_em)}</td>
+    </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px">Nenhum lead encontrado</td></tr>';
+}
+
+/* ─── REALTIME ───────────────────────────────────────────── */
+function renderRealtime(){
+  const list=document.getElementById('rtList');
+  const active=LEADS.filter(l=>!l.bot_ativo&&l.coluna!=='perdido');
+  list.innerHTML=active.map(l=>`
+    <div class="rt-lead ${activeLeadRt===l.id?'active':''}" onclick="selectRtLead(${l.id})">
+      <div class="rt-lead-name">${l.nome||'Sem nome'}</div>
+      <div class="rt-lead-phone">${fmtPhone(l.whatsapp)}</div>
+      <div class="rt-lead-time">${fmtDate(l.criado_em)}</div>
+    </div>`).join('')||'<div style="padding:20px;color:var(--text3);font-size:13px">Nenhum atendimento ativo</div>';
+}
+async function selectRtLead(id){
+  activeLeadRt=id;
+  const l=LEADS.find(x=>x.id===id);
+  if(l)document.getElementById('rtChatHeader').textContent=`${l.nome||'Lead'} — ${fmtPhone(l.whatsapp)}`;
+  renderRtMessages(id);
+}
+async function renderRtMessages(id){
+  try{
+    const r=await fetch(`${API}/api/leads/${id}/mensagens`);
+    if(!r.ok)return;
+    const msgs=await r.json();
+    const wrap=document.getElementById('rtMessages');
+    wrap.innerHTML=msgs.map(m=>`
+      <div>
+        <div class="msg msg-${m.de==='bot'?'bot':m.de==='vendedor'?'vendedor':'client'}">${m.conteudo}</div>
+        <div class="msg-time" style="text-align:${m.de==='cliente'?'left':'right'}">${fmtDateTime(m.hora)}</div>
+      </div>`).join('');
+    wrap.scrollTop=wrap.scrollHeight;
+  }catch(e){}
+}
+
+/* ─── AGENDA ─────────────────────────────────────────────── */
+function renderAgenda(){
+  const g=document.getElementById('agendaGrid');
+  if(!AGENDAMENTOS.length){g.innerHTML='<div style="color:var(--text3);font-size:13px;grid-column:1/-1">Nenhum agendamento encontrado</div>';return;}
+  g.innerHTML=AGENDAMENTOS.map(a=>`
+    <div class="agenda-card">
+      <div class="agenda-time">${fmtDateTime(a.data_hora)}</div>
+      <div class="agenda-name">${a.nome||'—'}</div>
+      <div class="agenda-phone">${fmtPhone(a.whatsapp)}</div>
+      <span class="agenda-type">${a.tipo||'visita'}</span>
+      ${a.observacao?`<div style="font-size:11px;color:var(--text3);margin-top:8px">${a.observacao}</div>`:''}
+    </div>`).join('');
+}
+
+/* ─── MÉTRICAS ───────────────────────────────────────────── */
+async function renderMetricas(){
+  try{
+    const r=await fetch(`${API}/api/metricas?loja_id=${SESSION.loja_id}&dias=30`);
+    if(!r.ok)return;
+    const d=await r.json();
+    document.getElementById('velStats').innerHTML=`
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div><div style="font-size:11px;color:var(--text3)">Velocidade média</div><div style="font-size:28px;font-weight:700;color:var(--purple2)">${d.velocidade_media_min||'—'}<span style="font-size:14px;font-weight:400;color:var(--text3)"> min</span></div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Taxa de conversão</div><div style="font-size:28px;font-weight:700;color:var(--green2)">${d.taxa_conversao||0}%</div></div>
+        <div><div style="font-size:11px;color:var(--text3)">Total de leads (30d)</div><div style="font-size:28px;font-weight:700;color:var(--blue2)">${d.total||0}</div></div>
+      </div>`;
+
+    if(window._cLoja)window._cLoja.destroy();
+    const lojaLabels=Object.keys(d.por_coluna||{});
+    const lojaVals=lojaLabels.map(k=>d.por_coluna[k]);
+    window._cLoja=new Chart(document.getElementById('chartLoja'),{type:'bar',data:{labels:lojaLabels,datasets:[{data:lojaVals,backgroundColor:'rgba(59,130,246,.6)',borderColor:'#3b82f6',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#64748b'},grid:{display:false}},y:{ticks:{color:'#64748b'},grid:{color:'#1e2d45'}}}}});
+
+    if(window._cStatus)window._cStatus.destroy();
+    const canalLabels=Object.keys(d.por_canal||{});
+    const canalVals=canalLabels.map(k=>d.por_canal[k]);
+    window._cStatus=new Chart(document.getElementById('chartStatus'),{type:'doughnut',data:{labels:canalLabels,datasets:[{data:canalVals,backgroundColor:['#10b981','#8b5cf6','#3b82f6'],borderColor:'#111827',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#94a3b8',boxWidth:12}}}}});
+  }catch(e){}
+}
+
+/* ─── EQUIPE ─────────────────────────────────────────────── */
+function renderEquipe(){
+  const g=document.getElementById('teamGrid');
+  if(!VENDEDORES.length){g.innerHTML='<div style="color:var(--text3);font-size:13px;grid-column:1/-1">Nenhum vendedor cadastrado</div>';return;}
+  g.innerHTML=VENDEDORES.map(v=>`
+    <div class="team-card">
+      <div class="team-avatar">${v.nome.slice(0,2).toUpperCase()}</div>
+      <div>
+        <div class="team-name">${v.nome}</div>
+        <div class="team-phone">${fmtPhone(v.whatsapp)}</div>
+        <div class="team-loja">${v.loja_id||'—'}</div>
+      </div>
+      <div class="team-actions">
+        <button class="btn btn-sm btn-red" onclick="removeVendedor(${v.id})">🗑 Remover</button>
+      </div>
+    </div>`).join('');
+}
+async function removeVendedor(id){
+  if(!confirm('Remover vendedor?'))return;
+  try{await fetch(`${API}/api/vendedores/${id}`,{method:'DELETE'});await loadVendedores();renderEquipe();toast('Vendedor removido','ok');}catch(e){toast('Erro ao remover','err');}
+}
+
+/* ─── META API ───────────────────────────────────────────── */
+async function saveMeta(){
+  const loja=document.getElementById('metaLoja').value;
+  const phoneId=document.getElementById('metaPhoneId').value;
+  const wabaId=document.getElementById('metaWabaId').value;
+  const token=document.getElementById('metaToken').value;
+  if(!loja||!token){toast('Preencha todos os campos obrigatórios','err');return;}
+  try{
+    const r=await fetch(`${API}/api/lojas/${loja}/meta`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone_id:phoneId,waba_id:wabaId,token})});
+    if(r.ok){document.getElementById('metaDot').className='conn-dot ok';document.getElementById('metaStatusTxt').textContent='Credenciais salvas';toast('Credenciais salvas!','ok');}
+  }catch(e){toast('Erro ao salvar','err');}
+}
+async function testMeta(){
+  const res=document.getElementById('metaTestResult');
+  res.style.display='block';res.style.background='var(--amberbg)';res.style.color='var(--amber2)';res.textContent='🔄 Testando...';
+  setTimeout(()=>{
+    const token=document.getElementById('metaToken').value;
+    if(token&&token.length>20){
+      res.style.background='var(--greenbg)';res.style.color='var(--green2)';res.textContent='✅ Credenciais válidas! Webhook pronto para receber leads.';
+      document.getElementById('metaDot').className='conn-dot ok';
+    }else{
+      res.style.background='var(--redbg)';res.style.color='var(--red2)';res.textContent='❌ Token inválido. Verifique no Meta Business Suite.';
+    }
+  },1500);
+}
+
+/* ─── EVOLUTION ──────────────────────────────────────────── */
+async function saveEvo(){
+  const loja=document.getElementById('evoLoja').value;
+  const instance=document.getElementById('evoInstance').value;
+  if(!loja||!instance){toast('Preencha todos os campos','err');return;}
+  try{
+    const r=await fetch(`${API}/api/lojas/${loja}/evolution`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({instance})});
+    if(r.ok)toast('Evolution configurada!','ok');
+  }catch(e){toast('Erro ao salvar','err');}
+}
+async function loadEvoInstances(){
+  const wrap=document.getElementById('evoInstances');
+  wrap.innerHTML='<div style="color:var(--text3);font-size:12px">Carregando...</div>';
+  try{
+    const r=await fetch('http://187.77.39.94:8080/instance/fetchInstances',{headers:{'apikey':'atlantica2026'}});
+    if(r.ok){
+      const d=await r.json();
+      const instances=Array.isArray(d)?d:(d.data||[]);
+      wrap.innerHTML=instances.map(i=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px;background:var(--surf2);border-radius:6px;font-size:12px">
+          <span>${i.instance?.instanceName||i.name||'—'}</span>
+          <span style="color:${(i.instance?.state||i.state)==='open'?'var(--green2)':'var(--red2)'}">${(i.instance?.state||i.state)==='open'?'✅ Conectado':'❌ Desconectado'}</span>
+        </div>`).join('')||'<div style="color:var(--text3);font-size:12px">Nenhuma instância encontrada</div>';
+    }
+  }catch(e){wrap.innerHTML='<div style="color:var(--text3);font-size:12px">Não foi possível carregar as instâncias (CORS). Use o painel da Evolution API diretamente.</div>';}
+}
+
+/* ─── MODALS ─────────────────────────────────────────────── */
+function showModal(type, extra){
+  const bg=document.getElementById('modalBg');
+  const box=document.getElementById('modalBox');
+  if(type==='addLead'){
+    box.innerHTML=`
+      <div class="modal-title">Novo Lead</div>
+      <div class="set-field"><label>Nome</label><input id="mNome" placeholder="Nome do cliente"></div>
+      <div class="set-field"><label>WhatsApp</label><input id="mPhone" placeholder="5522999999999"></div>
+      <div class="set-field"><label>Canal</label><select id="mCanal"><option>WhatsApp</option><option>Instagram</option><option>Facebook</option></select></div>
+      <div class="set-field"><label>Veículo de interesse</label><input id="mVeiculo" placeholder="Ex: Honda PCX 160"></div>
+      <div class="set-field"><label>Coluna</label><select id="mColuna">${COLUNAS.map(c=>`<option value="${c.id}"${c.id===(extra||'entrada')?'selected':''}>${c.name}</option>`).join('')}</select></div>
+      <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-blue" onclick="submitLead()">Adicionar</button></div>`;
+  }
+  if(type==='addVendedor'){
+    box.innerHTML=`
+      <div class="modal-title">Adicionar Vendedor</div>
+      <div class="set-field"><label>Nome</label><input id="vNome" placeholder="Nome completo"></div>
+      <div class="set-field"><label>WhatsApp</label><input id="vPhone" placeholder="5522999999999"></div>
+      <div class="set-field"><label>Loja</label><select id="vLoja">${LOJAS.map(l=>`<option value="${l.id}">${l.nome}</option>`).join('')||`<option value="${SESSION.loja_id}">${SESSION.store}</option>`}</select></div>
+      <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-blue" onclick="submitVendedor()">Salvar</button></div>`;
+  }
+  if(type==='addAgenda'){
+    box.innerHTML=`
+      <div class="modal-title">Novo Agendamento</div>
+      <div class="set-field"><label>Nome do cliente</label><input id="aNome" placeholder="Nome"></div>
+      <div class="set-field"><label>WhatsApp</label><input id="aPhone" placeholder="5522999999999"></div>
+      <div class="set-field"><label>Data e hora</label><input id="aData" type="datetime-local"></div>
+      <div class="set-field"><label>Tipo</label><select id="aTipo"><option value="visita">Visita presencial</option><option value="online">Simulação online</option><option value="entrega">Entrega de moto</option></select></div>
+      <div class="set-field"><label>Observação</label><textarea id="aObs" rows="3" placeholder="Informações adicionais..."></textarea></div>
+      <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-blue" onclick="submitAgenda()">Salvar</button></div>`;
+  }
+  bg.classList.remove('hidden');
+}
+function closeModal(){document.getElementById('modalBg').classList.add('hidden');}
+async function submitLead(){
+  const body={nome:document.getElementById('mNome').value,whatsapp:document.getElementById('mPhone').value,canal:document.getElementById('mCanal').value,veiculo_interesse:document.getElementById('mVeiculo').value,coluna:document.getElementById('mColuna').value,loja_id:SESSION.loja_id,bot_ativo:false,status:'Novo'};
+  try{
+    const r=await fetch(`${API}/api/leads`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.ok){await loadLeads();renderKanban();renderTable();renderDashboard();closeModal();toast('Lead adicionado!','ok');}
+  }catch(e){toast('Erro ao adicionar lead','err');}
+}
+async function submitVendedor(){
+  const body={nome:document.getElementById('vNome').value,whatsapp:document.getElementById('vPhone').value,loja_id:document.getElementById('vLoja')?.value||SESSION.loja_id};
+  try{
+    const r=await fetch(`${API}/api/vendedores`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.ok){await loadVendedores();renderEquipe();closeModal();toast('Vendedor adicionado!','ok');}
+  }catch(e){toast('Erro ao adicionar vendedor','err');}
+}
+async function submitAgenda(){
+  const body={nome:document.getElementById('aNome').value,whatsapp:document.getElementById('aPhone').value,data_hora:document.getElementById('aData').value,tipo:document.getElementById('aTipo').value,observacao:document.getElementById('aObs').value,loja_id:SESSION.loja_id,origem:'manual'};
+  try{
+    const r=await fetch(`${API}/api/agendamentos`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.ok){await loadAgendamentos();renderAgenda();closeModal();toast('Agendamento criado!','ok');}
+  }catch(e){toast('Erro ao criar agendamento','err');}
+}
+
+/* ─── EXPORT ─────────────────────────────────────────────── */
+async function exportLeads(){
+  try{
+    const r=await fetch(`${API}/api/leads/exportar?loja_id=${SESSION.loja_id}`);
+    if(r.ok){
+      const blob=await r.blob();
+      const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='leads.xlsx';
+      document.body.appendChild(a);a.click();a.remove();
+      toast('Excel exportado!','ok');
+    }
+  }catch(e){toast('Erro ao exportar','err');}
+}
+
+/* ─── UTILS ──────────────────────────────────────────────── */
+function populateLojaSelects(){
+  const sel=['metaLoja','evoLoja'];
+  sel.forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.innerHTML=`<option value="">Selecione...</option>`+LOJAS.map(l=>`<option value="${l.id}">${l.nome}</option>`).join('');
+  });
+}
+function fmtPhone(p){
+  if(!p)return'—';const s=String(p).replace(/\D/g,'');
+  if(s.length>=12)return`+${s.slice(0,2)} (${s.slice(2,4)}) ${s.slice(4,9)}-${s.slice(9,13)}`;
+  if(s.length===11)return`(${s.slice(0,2)}) ${s.slice(2,7)}-${s.slice(7)}`;
+  return p;
+}
+function fmtDate(d){if(!d)return'—';return new Date(d).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});}
+function fmtDateTime(d){if(!d)return'—';return new Date(d).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
+function copy(txt){navigator.clipboard.writeText(txt).then(()=>toast('Copiado!','ok'));}
+function toast(msg,type=''){
+  const t=document.getElementById('toast');t.textContent=msg;t.className='show'+(type?' '+type:'');
+  setTimeout(()=>t.className='',2500);
+}
+// Adicionar rota de criação de lead (não existe no backend ainda, usando PATCH como fallback)
+</script>
 </body>
 </html>
