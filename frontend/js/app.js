@@ -1088,6 +1088,10 @@
             <button class="btn btn-ghost btn-sm" type="button" data-testar-loja="${esc(l.id)}">🔗 Testar</button>
           </div>
           <div class="test-result" data-result-loja="${esc(l.id)}" style="font-size:12px;display:none;"></div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-dim);margin-top:4px;cursor:pointer;">
+            <input type="checkbox" data-monitorar-loja="${esc(l.id)}" ${l.apenas_monitorar ? "checked" : ""}>
+            Somente monitorar (não responder — usar quando outro sistema já atende esse número)
+          </label>
         </form>
         <div class="nav-sep"></div>
         <form class="evo-form" data-loja="${esc(l.id)}" style="display:flex;flex-direction:column;gap:10px;">
@@ -1128,6 +1132,22 @@
         }
       });
     });
+    grid.querySelectorAll("[data-monitorar-loja]").forEach((chk) => {
+      chk.addEventListener("change", async () => {
+        const lojaId = chk.dataset.monitorarLoja;
+        try {
+          await api(`/api/lojas/${lojaId}/monitoramento`, {
+            method: "PATCH",
+            body: JSON.stringify({ apenas_monitorar: chk.checked }),
+          });
+          toast(chk.checked ? "Modo monitoramento ativado — o bot não vai responder por essa loja." : "Modo monitoramento desativado.", "success");
+        } catch (err) {
+          chk.checked = !chk.checked; // reverte se der erro
+          toast(`Erro ao salvar: ${err.message}`, "error");
+        }
+      });
+    });
+
     grid.querySelectorAll(".meta-form").forEach((form) => {
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
