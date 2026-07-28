@@ -1,5 +1,6 @@
 import asyncio
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
+import random
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -121,9 +122,9 @@ async def meta_webhook(request: Request, db: Session = Depends(get_db)):
                 if resultado.get("transferir"):
                     vendedores = db.query(Vendedor).filter(Vendedor.loja_id == loja.id, Vendedor.ativo == True).all()
                     if vendedores:
-                        import random
+                        import random as _random
                         from services.bot_service import montar_mensagem_transferencia
-                        vendedor = random.choice(vendedores)
+                        vendedor = _random.choice(vendedores)
                         lead.vendedor_id = vendedor.id
                         db.commit()
                         msg_transf = montar_mensagem_transferencia(
@@ -188,7 +189,9 @@ def listar_leads(loja_id: str = None, coluna: str = None, db: Session = Depends(
     return [{"id": l.id, "nome": l.nome, "whatsapp": l.whatsapp, "canal": l.canal,
              "coluna": l.coluna, "status": l.status, "loja_id": l.loja_id,
              "vendedor": l.vendedor.nome if l.vendedor else None,
+             "vendedor_id": l.vendedor_id,
              "veiculo": l.veiculo_interesse, "forma_compra": l.forma_compra,
+             "cpf": l.cpf, "modalidade": l.modalidade,
              "criado_em": l.criado_em.isoformat() if l.criado_em else None,
              "bot_ativo": l.bot_ativo} for l in q.order_by(Lead.criado_em.desc()).all()]
 
@@ -198,6 +201,37 @@ def mover_lead(lead_id: int, body: dict, db: Session = Depends(get_db)):
     if not lead:
         raise HTTPException(404)
     lead.coluna = body.get("coluna")
+    db.commit()
+    return {"ok": True}
+
+@app.patch("/api/leads/{lead_id}/vendedor")
+def atribuir_vendedor(lead_id: int, body: dict, db: Session = Depends(get_db)):
+    """Atribuição manual de vendedor — usada no drag-and-drop do Kanban por vendedor."""
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(404)
+    vendedor_id = body.get("vendedor_id")
+    lead.vendedor_id = vendedor_id
+    if vendedor_id:
+        lead.bot_ativo = False
+        if lead.coluna in ("entrada", None):
+            lead.coluna = "atribuido"
+        if not lead.transferido_em:
+            lead.transferido_em = datetime.utcnow()
+    db.commit()
+    return {"ok": True}
+
+@app.patch("/api/leads/{lead_id}/assumir")
+def assumir_lead(lead_id: int, db: Session = Depends(get_db)):
+    """Um humano assume a conversa manualmente, sem precisar atribuir vendedor ainda."""
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(404)
+    lead.bot_ativo = False
+    if lead.coluna == "entrada":
+        lead.coluna = "atribuido"
+    if not lead.transferido_em:
+        lead.transferido_em = datetime.utcnow()
     db.commit()
     return {"ok": True}
 
@@ -255,6 +289,7 @@ def remover_vendedor(vid: int, db: Session = Depends(get_db)):
 @app.get("/api/lojas")
 def listar_lojas(db: Session = Depends(get_db)):
     return [{"id": l.id, "nome": l.nome, "meta_phone_id": l.meta_phone_id,
+             "meta_waba_id": l.meta_waba_id,
              "evolution_instance": l.evolution_instance} for l in db.query(Loja).filter(Loja.ativo == True).all()]
 
 @app.post("/api/lojas")
@@ -271,9 +306,29 @@ def configurar_meta(loja_id: str, body: dict, db: Session = Depends(get_db)):
         raise HTTPException(404)
     l.meta_phone_id = body.get("phone_id")
     l.meta_waba_id = body.get("waba_id")
-    l.meta_token = body.get("token")
+    if body.get("token"):
+        l.meta_token = body.get("token")
     db.commit()
     return {"ok": True}
+
+@app.get("/api/lojas/{loja_id}/meta/testar")
+async def testar_meta(loja_id: str, db: Session = Depends(get_db)):
+    """Verifica se o Phone Number ID + Token cadastrados ainda são válidos na API da Meta."""
+    loja = db.query(Loja).filter(Loja.id == loja_id).first()
+    if not loja:
+        raise HTTPException(404, "Loja não encontrada")
+    if not loja.meta_phone_id or not loja.meta_token:
+        return {"ok": False, "detail": "Faltam Phone Number ID ou Token cadastrados"}
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"https://graph.facebook.com/v19.0/{loja.meta_phone_id}",
+            params={"fields": "display_phone_number,verified_name"},
+            headers={"Authorization": f"Bearer {loja.meta_token}"},
+        )
+    data = resp.json()
+    if resp.status_code == 200 and "display_phone_number" in data:
+        return {"ok": True, "numero": data.get("display_phone_number"), "nome": data.get("verified_name")}
+    return {"ok": False, "detail": data.get("error", {}).get("message", "Erro desconhecido")}
 
 @app.patch("/api/lojas/{loja_id}/evolution")
 def configurar_evolution(loja_id: str, body: dict, db: Session = Depends(get_db)):
@@ -296,12 +351,12 @@ def listar_agendamentos(loja_id: str = None, db: Session = Depends(get_db)):
 
 @app.post("/api/agendamentos")
 async def criar_agendamento(body: dict, db: Session = Depends(get_db)):
-    from datetime import datetime
+    from datetime import datetime as _dt
     a = Agendamento(
         nome_cliente=body["nome"],
         whatsapp=body["whatsapp"],
         loja_id=body["loja_id"],
-        data_hora=datetime.fromisoformat(body["data_hora"]),
+        data_hora=_dt.fromisoformat(body["data_hora"]),
         tipo=body.get("tipo", "visita"),
         observacao=body.get("observacao", ""),
         origem=body.get("origem", "manual")
@@ -311,6 +366,45 @@ async def criar_agendamento(body: dict, db: Session = Depends(get_db)):
     db.refresh(a)
     await manager.broadcast({"tipo": "novo_agendamento", "id": a.id})
     return {"id": a.id}
+
+# ─── CAMPANHAS (remarketing em massa) ───────────────────────────
+@app.post("/api/campanhas/disparar")
+async def disparar_campanha(body: dict, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    lead_ids = body.get("lead_ids", [])
+    mensagem = (body.get("mensagem") or "").strip()
+    intervalo_min = int(body.get("intervalo_min", 20))
+    intervalo_max = int(body.get("intervalo_max", 60))
+    if not lead_ids or not mensagem:
+        raise HTTPException(400, "Informe lead_ids e mensagem")
+
+    leads_existentes = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
+    ids_validos = [l.id for l in leads_existentes]
+    background_tasks.add_task(executar_campanha, ids_validos, mensagem, intervalo_min, intervalo_max)
+    return {"ok": True, "total": len(ids_validos)}
+
+
+async def executar_campanha(lead_ids: list, mensagem: str, intervalo_min: int, intervalo_max: int):
+    """Roda em background: manda a mensagem pra cada lead com um intervalo aleatório
+    entre os envios, pra reduzir o risco de bloqueio por spam."""
+    db = next(get_db())
+    try:
+        for lead_id in lead_ids:
+            lead = db.query(Lead).filter(Lead.id == lead_id).first()
+            if not lead:
+                continue
+            loja = db.query(Loja).filter(Loja.id == lead.loja_id).first()
+            if not loja or not loja.meta_phone_id or not loja.meta_token:
+                continue
+            texto = mensagem.replace("{nome}", lead.nome or "")
+            try:
+                await enviar_whatsapp(loja.meta_phone_id, loja.meta_token, lead.whatsapp, texto)
+                db.add(Mensagem(lead_id=lead.id, de="bot", conteudo=texto, origem="campanha"))
+                db.commit()
+            except Exception as e:
+                print(f"Erro ao enviar campanha pro lead {lead_id}: {e}")
+            await asyncio.sleep(random.randint(intervalo_min, intervalo_max))
+    finally:
+        db.close()
 
 # ─── MÉTRICAS ────────────────────────────────────────────────────
 @app.get("/api/metricas")
