@@ -32,6 +32,8 @@
     wsRetryMs: 2000,
     rtLeadId: null,
     charts: {}, // Chart.js instances, keyed by canvas id, so we can destroy before re-render
+    kanbanMode: "etapa", // "etapa" | "vendedor"
+    campanhaSelecionados: new Set(),
   };
 
   const COLUNAS = [
@@ -114,6 +116,7 @@
     realtime: ["Ao Vivo", "Atendimentos em andamento, em tempo real"],
     contatos: ["Contatos", "Todos os leads, com filtros e exportação"],
     agendamentos: ["Agendamentos", "Visitas e compromissos marcados"],
+    campanhas: ["Campanhas", "Remarketing em massa com intervalo entre envios"],
     metricas: ["Métricas", "Velocidade de atendimento e conversão"],
     equipe: ["Equipe", "Vendedores por loja"],
     config: ["Configuração Meta", "WhatsApp Business API e Evolution"],
@@ -177,6 +180,7 @@
     if (view === "realtime") renderRealtime();
     if (view === "contatos") renderContatos();
     if (view === "agendamentos") renderAgendamentos();
+    if (view === "campanhas") renderCampanhas();
     if (view === "metricas") renderMetricas();
     if (view === "equipe") renderEquipe();
     if (view === "config") renderConfig();
@@ -189,7 +193,11 @@
     const el = document.getElementById("viewDashboard");
     el.innerHTML = `<div class="empty-state"><div class="skeleton" style="height:120px;border-radius:14px;"></div></div>`;
     try {
-      const m = await api(`/api/metricas${state.lojaAtual ? `?loja_id=${encodeURIComponent(state.lojaAtual)}` : ""}`);
+      const [m] = await Promise.all([
+        api(`/api/metricas${state.lojaAtual ? `?loja_id=${encodeURIComponent(state.lojaAtual)}` : ""}`),
+        loadLeads(),
+        loadVendedores(),
+      ]);
       state.metricas = m;
       el.innerHTML = buildDashboardHTML(m, "dash");
       renderCharts(m, "dash");
@@ -238,6 +246,42 @@
         ${hasCanal
           ? `<div class="chart-box" style="max-width:420px;"><canvas id="${idPrefix}Canal"></canvas></div>`
           : `<div class="faint" style="font-size:13px;">Sem dados no período.</div>`}
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <div style="font-family:var(--font-display);font-weight:700;font-size:15px;margin-bottom:16px;">Desempenho por vendedor</div>
+        <div id="${idPrefix}VendedorPerf">${desempenhoPorVendedorHTML()}</div>
+      </div>
+    `;
+  }
+
+  function desempenhoPorVendedorHTML() {
+    if (!state.vendedores.length) {
+      return `<div class="faint" style="font-size:13px;">Nenhum vendedor cadastrado ainda.</div>`;
+    }
+    const linhas = state.vendedores.map((v) => {
+      const leadsDoVendedor = state.leads.filter((l) => l.vendedor_id === v.id);
+      const abertos = leadsDoVendedor.filter((l) => l.coluna !== "fechado" && l.coluna !== "perdido").length;
+      const fechados = leadsDoVendedor.filter((l) => l.coluna === "fechado").length;
+      const perdidos = leadsDoVendedor.filter((l) => l.coluna === "perdido").length;
+      return { nome: v.nome, total: leadsDoVendedor.length, abertos, fechados, perdidos };
+    });
+    return `
+      <div class="table-wrap" style="border:none;">
+        <table>
+          <thead><tr><th>Vendedor</th><th>Leads</th><th>Abertos</th><th>Fechados</th><th>Perdidos</th></tr></thead>
+          <tbody>
+            ${linhas.map((r) => `
+              <tr>
+                <td>${esc(r.nome)}</td>
+                <td class="mono">${r.total}</td>
+                <td class="mono">${r.abertos}</td>
+                <td class="mono">${r.fechados}</td>
+                <td class="mono">${r.perdidos}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
       </div>
     `;
   }
@@ -336,15 +380,31 @@
     const el = document.getElementById("viewKanban");
     el.innerHTML = `
       <div class="kanban-toolbar">
+        <div class="loja-switch" id="kanbanModeSwitch" style="margin-right:auto;">
+          <button data-mode="etapa" class="${state.kanbanMode === "etapa" ? "active" : ""}">Por etapa</button>
+          <button data-mode="vendedor" class="${state.kanbanMode === "vendedor" ? "active" : ""}">Por vendedor</button>
+        </div>
         <input type="search" id="kanbanSearch" placeholder="Buscar por nome ou WhatsApp...">
       </div>
       <div class="kanban-board" id="kanbanBoard"></div>
     `;
     document.getElementById("kanbanSearch").addEventListener("input", (e) => {
-      drawKanbanBoard(e.target.value.trim().toLowerCase());
+      drawKanban(e.target.value.trim().toLowerCase());
     });
-    await loadLeads();
-    drawKanbanBoard("");
+    document.querySelectorAll("#kanbanModeSwitch button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.kanbanMode = btn.dataset.mode;
+        document.querySelectorAll("#kanbanModeSwitch button").forEach((b) => b.classList.toggle("active", b === btn));
+        drawKanban(document.getElementById("kanbanSearch").value.trim().toLowerCase());
+      });
+    });
+    await Promise.all([loadLeads(), loadVendedores()]);
+    drawKanban("");
+  }
+
+  function drawKanban(filter) {
+    if (state.kanbanMode === "vendedor") drawKanbanBoardByVendedor(filter);
+    else drawKanbanBoard(filter);
   }
 
   async function loadLeads() {
@@ -429,6 +489,78 @@
     });
   }
 
+  // ---------------------------------------------------------------
+  // KANBAN — modo "Por vendedor": uma coluna por vendedor + Pendentes/Bot
+  // ---------------------------------------------------------------
+  function drawKanbanBoardByVendedor(filter) {
+    const board = document.getElementById("kanbanBoard");
+    if (!board) return;
+    const leads = state.leads.filter((l) =>
+      (!filter || (l.nome || "").toLowerCase().includes(filter) || (l.whatsapp || "").includes(filter)) &&
+      l.coluna !== "perdido" && l.coluna !== "fechado" // board ao vivo: só atendimentos em andamento
+    );
+
+    const colunas = [
+      { id: "pendente", label: "🤖 Pendentes / Bot", vendedorId: null },
+      ...state.vendedores.map((v) => ({ id: `v-${v.id}`, label: v.nome, vendedorId: v.id })),
+    ];
+
+    board.innerHTML = colunas.map((col) => {
+      const items = col.vendedorId === null
+        ? leads.filter((l) => !l.vendedor_id)
+        : leads.filter((l) => l.vendedor_id === col.vendedorId);
+      return `
+        <div class="kcol" data-vendedor-col="${col.id}">
+          <div class="kcol-head"><span>${esc(col.label)}</span><span class="count">${items.length}</span></div>
+          <div class="kcol-body" data-vendedor-target="${col.vendedorId === null ? "" : col.vendedorId}">
+            ${items.map(leadCardHTML).join("") || `<div class="faint" style="font-size:12px;padding:8px 2px;">Vazio</div>`}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    wireKanbanDnDVendedor();
+  }
+
+  function wireKanbanDnDVendedor() {
+    document.querySelectorAll("#kanbanBoard .lead-card").forEach((card) => {
+      card.addEventListener("dragstart", (e) => {
+        card.classList.add("dragging");
+        e.dataTransfer.setData("text/plain", card.dataset.id);
+      });
+      card.addEventListener("dragend", () => card.classList.remove("dragging"));
+      card.addEventListener("click", () => openLeadDrawer(Number(card.dataset.id)));
+    });
+
+    document.querySelectorAll("#kanbanBoard .kcol-body").forEach((body) => {
+      body.addEventListener("dragover", (e) => { e.preventDefault(); body.classList.add("drag-over"); });
+      body.addEventListener("dragleave", () => body.classList.remove("drag-over"));
+      body.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        body.classList.remove("drag-over");
+        const id = Number(e.dataTransfer.getData("text/plain"));
+        const targetRaw = body.dataset.vendedorTarget;
+        const novoVendedorId = targetRaw ? Number(targetRaw) : null;
+        const lead = state.leads.find((l) => l.id === id);
+        if (!lead || lead.vendedor_id === novoVendedorId) return;
+        const anterior = { vendedor_id: lead.vendedor_id, vendedor: lead.vendedor, coluna: lead.coluna, bot_ativo: lead.bot_ativo };
+        const vendedorNovo = state.vendedores.find((v) => v.id === novoVendedorId);
+        lead.vendedor_id = novoVendedorId;
+        lead.vendedor = vendedorNovo ? vendedorNovo.nome : null;
+        if (novoVendedorId) { lead.bot_ativo = false; if (lead.coluna === "entrada") lead.coluna = "atribuido"; }
+        drawKanbanBoardByVendedor(document.getElementById("kanbanSearch")?.value.trim().toLowerCase() || "");
+        try {
+          await api(`/api/leads/${id}/vendedor`, { method: "PATCH", body: JSON.stringify({ vendedor_id: novoVendedorId }) });
+          toast(vendedorNovo ? `Atribuído a ${vendedorNovo.nome}.` : "Lead voltou para pendentes.", "success");
+        } catch (err) {
+          Object.assign(lead, anterior);
+          drawKanbanBoardByVendedor("");
+          toast(`Não foi possível atribuir: ${err.message}. Verifique se a rota /api/leads/{id}/vendedor já foi publicada no backend.`, "error");
+        }
+      });
+    });
+  }
+
   async function openLeadDrawer(id) {
     const lead = state.leads.find((l) => l.id === id);
     if (!lead) return;
@@ -448,6 +580,12 @@
             </div>
             <button class="btn btn-ghost btn-sm" id="closeDrawer">Fechar</button>
           </div>
+          ${lead.bot_ativo ? `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 20px; background:var(--amberbg); border-bottom:1px solid var(--border-soft);">
+              <span style="font-size:12.5px; color:var(--amber2);">🤖 IA está atendendo este lead</span>
+              <button class="btn btn-accent btn-sm" id="assumirLeadBtn">Assumir conversa</button>
+            </div>
+          ` : ""}
           <div class="drawer-body" id="drawerMsgs">
             <div class="skeleton" style="height:40px;"></div>
           </div>
@@ -457,6 +595,22 @@
     document.getElementById("closeDrawer").addEventListener("click", () => (root.innerHTML = ""));
     document.getElementById("drawerOverlay").addEventListener("click", (e) => {
       if (e.target.id === "drawerOverlay") root.innerHTML = "";
+    });
+    document.getElementById("assumirLeadBtn")?.addEventListener("click", async (e) => {
+      const btn = e.target;
+      btn.disabled = true;
+      btn.textContent = "Assumindo...";
+      try {
+        await api(`/api/leads/${id}/assumir`, { method: "PATCH" });
+        lead.bot_ativo = false;
+        if (lead.coluna === "entrada") lead.coluna = "atribuido";
+        toast("Conversa assumida — o bot parou de responder este lead.", "success");
+        openLeadDrawer(id); // redesenha sem o banner
+      } catch (err) {
+        toast(`Não foi possível assumir: ${err.message}`, "error");
+        btn.disabled = false;
+        btn.textContent = "Assumir conversa";
+      }
     });
     try {
       const msgs = await api(`/api/leads/${id}/mensagens`);
@@ -584,18 +738,20 @@
     wrap.innerHTML = `
       <table>
         <thead><tr>
-          <th>Nome</th><th>WhatsApp</th><th>Canal</th><th>Etapa</th><th>Vendedor</th><th>Veículo</th><th>Forma</th><th>Criado</th>
+          <th>Nome</th><th>WhatsApp</th><th>CPF</th><th>Canal</th><th>Etapa</th><th>Vendedor</th><th>Veículo</th><th>Forma</th><th>Modalidade</th><th>Criado</th>
         </tr></thead>
         <tbody>
           ${rows.map((l) => `
             <tr data-id="${l.id}">
               <td>${esc(l.nome || "—")}</td>
               <td class="mono">${esc(l.whatsapp)}</td>
+              <td class="mono">${esc(l.cpf || "—")}</td>
               <td>${esc(l.canal || "—")}</td>
               <td>${badgeForColuna(l.coluna)}</td>
               <td>${esc(l.vendedor || "—")}</td>
               <td>${esc(l.veiculo || "—")}</td>
               <td>${esc(l.forma_compra || "—")}</td>
+              <td>${esc(l.modalidade || "—")}</td>
               <td class="dim">${fmtDate(l.criado_em)}</td>
             </tr>
           `).join("")}
@@ -731,7 +887,7 @@
     try {
       const qs = new URLSearchParams({ dias });
       if (state.lojaAtual) qs.set("loja_id", state.lojaAtual);
-      const m = await api(`/api/metricas?${qs.toString()}`);
+      const [m] = await Promise.all([api(`/api/metricas?${qs.toString()}`), loadLeads(), loadVendedores()]);
       body.innerHTML = buildDashboardHTML(m, "met");
       renderCharts(m, "met");
     } catch (e) {
@@ -917,11 +1073,21 @@
     grid.innerHTML = state.lojas.map((l) => `
       <div class="card">
         <div style="font-family:var(--font-display);font-weight:700;font-size:15px;margin-bottom:14px;">${esc(l.nome)}</div>
+
+        <button class="btn btn-accent" style="width:100%;justify-content:center;margin-bottom:16px;" data-embedded-loja="${esc(l.id)}">
+          ⚡ Conectar automaticamente (recomendado)
+        </button>
+        <div class="faint" style="font-size:11.5px;margin:-10px 0 16px;">Abre um popup oficial da Meta — preenche os campos abaixo sozinho.</div>
+
         <form class="meta-form" data-loja="${esc(l.id)}" style="display:flex;flex-direction:column;gap:10px;">
           <div class="field"><label>Phone Number ID</label><input name="phone_id" value="${esc(l.meta_phone_id || "")}"></div>
           <div class="field"><label>WABA ID</label><input name="waba_id" value="${esc(l.meta_waba_id || "")}"></div>
           <div class="field"><label>Token de acesso</label><input name="token" type="password" placeholder="Deixe em branco para manter"></div>
-          <button class="btn btn-accent btn-sm" type="submit">Salvar Meta API</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm" type="submit" style="flex:1;">Salvar manualmente</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-testar-loja="${esc(l.id)}">🔗 Testar</button>
+          </div>
+          <div class="test-result" data-result-loja="${esc(l.id)}" style="font-size:12px;display:none;"></div>
         </form>
         <div class="nav-sep"></div>
         <form class="evo-form" data-loja="${esc(l.id)}" style="display:flex;flex-direction:column;gap:10px;">
@@ -931,6 +1097,37 @@
       </div>
     `).join("");
 
+    grid.querySelectorAll("[data-embedded-loja]").forEach((btn) => {
+      btn.addEventListener("click", () => startEmbeddedSignup(btn.dataset.embeddedLoja, btn));
+    });
+
+    grid.querySelectorAll("[data-testar-loja]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const lojaId = btn.dataset.testarLoja;
+        const resultEl = grid.querySelector(`[data-result-loja="${lojaId}"]`);
+        btn.disabled = true;
+        btn.textContent = "Testando...";
+        resultEl.style.display = "block";
+        resultEl.className = "test-result";
+        resultEl.textContent = "Verificando conexão...";
+        try {
+          const r = await api(`/api/lojas/${lojaId}/meta/testar`);
+          if (r.ok) {
+            resultEl.className = "test-result ok";
+            resultEl.textContent = `✅ Conectado: ${r.nome || "número válido"} (${r.numero || ""})`;
+          } else {
+            resultEl.className = "test-result err";
+            resultEl.textContent = `❌ ${r.detail || "Falha na conexão"}`;
+          }
+        } catch (err) {
+          resultEl.className = "test-result err";
+          resultEl.textContent = `❌ ${err.message}`;
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "🔗 Testar";
+        }
+      });
+    });
     grid.querySelectorAll(".meta-form").forEach((form) => {
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -957,6 +1154,219 @@
         }
       });
     });
+  }
+
+  // ---------------------------------------------------------------
+  // CAMPANHAS (remarketing em massa, inspirado no fluxo do AutoLead)
+  // ---------------------------------------------------------------
+  async function renderCampanhas() {
+    const el = document.getElementById("viewCampanhas");
+    el.innerHTML = `
+      <div class="two-col" style="grid-template-columns:1.3fr 1fr;">
+        <div>
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <select id="campFiltroColuna">
+                <option value="">Todas as etapas</option>
+                ${COLUNAS.map((c) => `<option value="${c.id}">${c.icon} ${c.label}</option>`).join("")}
+              </select>
+              <input type="search" id="campBusca" placeholder="Buscar nome ou WhatsApp...">
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm" id="campMarcarTudo">Marcar todos</button>
+              <button class="btn btn-sm" id="campLimpar">Limpar seleção</button>
+            </div>
+          </div>
+          <div class="table-wrap"><div id="campTableBody"><div class="skeleton" style="height:220px;"></div></div></div>
+        </div>
+
+        <div class="card">
+          <div style="font-family:var(--font-display);font-weight:700;font-size:15px;margin-bottom:4px;">Nova campanha</div>
+          <div class="dim" style="font-size:12px;margin-bottom:16px;"><span id="campContagem">0</span> leads selecionados</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div class="field">
+              <label>Mensagem</label>
+              <textarea id="campMensagem" rows="5" placeholder="Oi {nome}! Vimos que você ainda não finalizou..."></textarea>
+            </div>
+            <div class="faint" style="font-size:11.5px;margin-top:-6px;">Use <code>{nome}</code> pra personalizar automaticamente com o nome de cada lead.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div class="field"><label>Intervalo mín. (seg)</label><input type="number" id="campIntervaloMin" value="20" min="5"></div>
+              <div class="field"><label>Intervalo máx. (seg)</label><input type="number" id="campIntervaloMax" value="60" min="10"></div>
+            </div>
+            <div class="faint" style="font-size:11.5px;">O envio espera um tempo aleatório entre esse mínimo e máximo pra cada lead, evitando bloqueio por spam.</div>
+            <button class="btn btn-accent" id="campDisparar" style="justify-content:center;">🚀 Disparar campanha</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById("campFiltroColuna").addEventListener("change", drawCampanhaTable);
+    document.getElementById("campBusca").addEventListener("input", drawCampanhaTable);
+    document.getElementById("campMarcarTudo").addEventListener("click", () => {
+      camposFiltradosAtuais().forEach((l) => state.campanhaSelecionados.add(l.id));
+      drawCampanhaTable();
+    });
+    document.getElementById("campLimpar").addEventListener("click", () => {
+      state.campanhaSelecionados.clear();
+      drawCampanhaTable();
+    });
+    document.getElementById("campDisparar").addEventListener("click", onDispararCampanha);
+    await loadLeads();
+    drawCampanhaTable();
+  }
+
+  function camposFiltradosAtuais() {
+    const coluna = document.getElementById("campFiltroColuna")?.value || "";
+    const busca = (document.getElementById("campBusca")?.value || "").trim().toLowerCase();
+    return state.leads.filter((l) =>
+      (!coluna || l.coluna === coluna) &&
+      (!busca || (l.nome || "").toLowerCase().includes(busca) || (l.whatsapp || "").includes(busca))
+    );
+  }
+
+  function drawCampanhaTable() {
+    const wrap = document.getElementById("campTableBody");
+    if (!wrap) return;
+    const rows = camposFiltradosAtuais();
+    document.getElementById("campContagem").textContent = state.campanhaSelecionados.size;
+    if (!rows.length) {
+      wrap.innerHTML = emptyState("Nenhum lead encontrado", "Ajuste os filtros.");
+      return;
+    }
+    wrap.innerHTML = `
+      <table>
+        <thead><tr><th style="width:36px;"></th><th>Nome</th><th>WhatsApp</th><th>Etapa</th></tr></thead>
+        <tbody>
+          ${rows.map((l) => `
+            <tr data-id="${l.id}" style="cursor:pointer;">
+              <td><input type="checkbox" class="campCheck" data-id="${l.id}" ${state.campanhaSelecionados.has(l.id) ? "checked" : ""}></td>
+              <td>${esc(l.nome || "—")}</td>
+              <td class="mono">${esc(l.whatsapp)}</td>
+              <td>${badgeForColuna(l.coluna)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+    wrap.querySelectorAll(".campCheck").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const id = Number(cb.dataset.id);
+        if (cb.checked) state.campanhaSelecionados.add(id);
+        else state.campanhaSelecionados.delete(id);
+        document.getElementById("campContagem").textContent = state.campanhaSelecionados.size;
+      });
+    });
+    wrap.querySelectorAll("tbody tr").forEach((tr) => {
+      tr.addEventListener("click", (e) => {
+        if (e.target.classList.contains("campCheck")) return;
+        const cb = tr.querySelector(".campCheck");
+        cb.checked = !cb.checked;
+        cb.dispatchEvent(new Event("change"));
+      });
+    });
+  }
+
+  async function onDispararCampanha() {
+    const mensagem = document.getElementById("campMensagem").value.trim();
+    const intervaloMin = Number(document.getElementById("campIntervaloMin").value) || 20;
+    const intervaloMax = Number(document.getElementById("campIntervaloMax").value) || 60;
+    const leadIds = Array.from(state.campanhaSelecionados);
+    if (!leadIds.length) { toast("Selecione pelo menos um lead.", "error"); return; }
+    if (!mensagem) { toast("Escreva a mensagem da campanha.", "error"); return; }
+    if (intervaloMax < intervaloMin) { toast("Intervalo máximo precisa ser maior que o mínimo.", "error"); return; }
+
+    const btn = document.getElementById("campDisparar");
+    btn.disabled = true;
+    btn.textContent = "Disparando...";
+    try {
+      const resp = await api("/api/campanhas/disparar", {
+        method: "POST",
+        body: JSON.stringify({ lead_ids: leadIds, mensagem, intervalo_min: intervaloMin, intervalo_max: intervaloMax }),
+      });
+      toast(`Campanha disparada para ${resp.total} leads. Os envios vão acontecer aos poucos, com intervalo entre eles.`, "success");
+      state.campanhaSelecionados.clear();
+      drawCampanhaTable();
+    } catch (err) {
+      toast(`Erro ao disparar campanha: ${err.message}`, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "🚀 Disparar campanha";
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Embedded Signup — fluxo "conectar com 2 cliques" oficial da Meta
+  // ---------------------------------------------------------------
+  let embeddedSignupData = null; // guarda phone_number_id/waba_id vindos do postMessage, até o FB.login resolver
+
+  function ensureEmbeddedListener() {
+    if (window.__embeddedListenerSet__) return;
+    window.__embeddedListenerSet__ = true;
+    window.addEventListener("message", (event) => {
+      if (!event.origin.endsWith("facebook.com")) return;
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "WA_EMBEDDED_SIGNUP" && data.event === "FINISH") {
+          embeddedSignupData = {
+            phone_number_id: data.data?.phone_number_id,
+            waba_id: data.data?.waba_id,
+          };
+        }
+      } catch (_) { /* mensagens de outras origens do FB que não são JSON — ignora */ }
+    });
+  }
+
+  async function startEmbeddedSignup(lojaId, btnEl) {
+    ensureEmbeddedListener();
+
+    if (!CONFIG.META_APP_ID || !CONFIG.META_CONFIG_ID) {
+      toast("Preencha META_APP_ID e META_CONFIG_ID em js/config.js primeiro (depois que o App da Meta for aprovado).", "error");
+      return;
+    }
+    if (typeof FB === "undefined") {
+      toast("SDK da Meta ainda carregando, tenta de novo em 2 segundos.", "error");
+      return;
+    }
+
+    embeddedSignupData = null;
+    const originalText = btnEl.textContent;
+    btnEl.disabled = true;
+    btnEl.textContent = "Abrindo popup da Meta...";
+
+    FB.login((response) => {
+      btnEl.disabled = false;
+      btnEl.textContent = originalText;
+
+      if (response.authResponse && response.authResponse.code) {
+        const code = response.authResponse.code;
+        finishEmbeddedSignup(lojaId, code);
+      } else {
+        toast("Login cancelado ou não concluído no popup da Meta.", "error");
+      }
+    }, {
+      config_id: CONFIG.META_CONFIG_ID,
+      response_type: "code",
+      override_default_response_type: true,
+      extras: { setup: {}, featureType: "whatsapp_business_app_onboarding", sessionInfoVersion: "3" },
+    });
+  }
+
+  async function finishEmbeddedSignup(lojaId, code) {
+    toast("Concluindo conexão automática...", "");
+    try {
+      await api(`/api/lojas/${lojaId}/meta/embedded`, {
+        method: "POST",
+        body: JSON.stringify({
+          code,
+          phone_number_id: embeddedSignupData?.phone_number_id || null,
+          waba_id: embeddedSignupData?.waba_id || null,
+        }),
+      });
+      toast("WhatsApp conectado automaticamente! ✅", "success");
+      state.lojas = await api("/api/lojas");
+      drawConfigGrid();
+    } catch (err) {
+      toast(`Erro ao finalizar conexão: ${err.message}`, "error");
+    }
   }
 
   // ---------------------------------------------------------------
@@ -1009,7 +1419,7 @@
       let data;
       try { data = JSON.parse(evt.data); } catch (_) { return; }
       if (["novo_lead", "nova_mensagem", "novo_agendamento"].includes(data.tipo)) {
-        if (state.view === "kanban") { loadLeads().then(() => drawKanbanBoard("")); }
+        if (state.view === "kanban") { Promise.all([loadLeads(), loadVendedores()]).then(() => drawKanban("")); }
         if (state.view === "dashboard") renderDashboard();
         if (state.view === "contatos") { loadLeads().then(drawContatosTable); }
         if (state.view === "realtime") {
